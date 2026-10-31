@@ -1,15 +1,15 @@
 # La clave `version:` está obsoleta en Compose v2+ y se omite a propósito.
-name: si-be-boilerplate
+name: gymhub
 
 services:
   postgres:
     image: postgres:18-alpine
-    container_name: si_be_postgres
+    container_name: gymhub_postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-si_be_boilerplate}
+      POSTGRES_DB: ${POSTGRES_DB:-gymhub}
     ports:
       # Se publica en el host para poder correr `prisma migrate` y la API
       # localmente sin entrar al contenedor.
@@ -23,7 +23,7 @@ services:
       # `api` espera a que este healthcheck pase antes de arrancar, para que
       # las migraciones no fallen contra un Postgres que todavía inicializa.
       test:
-        ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-si_be_boilerplate}']
+        ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-gymhub}']
       interval: 5s
       timeout: 5s
       retries: 10
@@ -33,7 +33,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: si_be_api
+    container_name: gymhub_api
     restart: unless-stopped
     depends_on:
       postgres:

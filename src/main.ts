@@ -29,7 +29,7 @@ async function bootstrap() {
   app.enableShutdownHooks();
 
   const swaggerConfig = new DocumentBuilder()
-    .setTitle('SI Backend Boilerplate')
+    .setTitle('GymHub API')
     .setDescription('API REST con autenticación por usuario y contraseña.')
     .setVersion('1.0')
     .addBearerAuth()

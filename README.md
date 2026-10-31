@@ -1,4 +1,4 @@
-# SI Backend Boilerplate
+# GymHub API
 
 API REST construida con **NestJS 12**, **Prisma 7** y **PostgreSQL 18**, con autenticación por usuario y contraseña lista para usar.
 
@@ -195,7 +195,7 @@ docker compose down                  # parar (los datos se conservan)
 docker compose down -v               # parar y BORRAR los datos
 
 # Abrir una consola psql dentro del contenedor
-docker compose exec postgres psql -U postgres -d si_be_boilerplate
+docker compose exec postgres psql -U postgres -d gymhub
 ```
 
 **Resetear la base desde cero:**
