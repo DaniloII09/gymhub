@@ -1,0 +1,19 @@
+// Módulo 4 · Check-in / control de acceso.
+
+model CheckIn {
+  id               String           @id @default(uuid()) @db.Uuid
+  memberId         String           @map("member_id") @db.Uuid
+  member           User             @relation("CheckInMember", fields: [memberId], references: [id])
+  checkedInAt      DateTime         @default(now()) @map("checked_in_at")
+  // Snapshot del estado al momento del ingreso (H16, H17).
+  membershipStatus MembershipStatus @map("membership_status")
+  membershipId     String?          @map("membership_id") @db.Uuid
+  membership       Membership?      @relation(fields: [membershipId], references: [id])
+  exceptionReason  String?          @map("exception_reason")
+  recordedById     String           @map("recorded_by_id") @db.Uuid
+  recordedBy       User             @relation("CheckInRecordedBy", fields: [recordedById], references: [id])
+
+  @@index([memberId, checkedInAt])
+  @@index([checkedInAt])
+  @@map("check_ins")
+}

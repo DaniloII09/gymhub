@@ -1,0 +1,50 @@
+// Módulo 3 · Agenda de entrenadores personales.
+
+enum PersonalSessionStatus {
+  SCHEDULED
+  COMPLETED
+  NO_SHOW
+}
+
+model TrainerAvailability {
+  id          String  @id @default(uuid()) @db.Uuid
+  trainerId   String  @map("trainer_id") @db.Uuid
+  trainer     User    @relation(fields: [trainerId], references: [id])
+  weekday     Weekday
+  startMinute Int     @map("start_minute")
+  endMinute   Int     @map("end_minute")
+
+  @@index([trainerId, weekday])
+  @@map("trainer_availability")
+}
+
+model TrainerBlockedDate {
+  id        String   @id @default(uuid()) @db.Uuid
+  trainerId String   @map("trainer_id") @db.Uuid
+  trainer   User     @relation(fields: [trainerId], references: [id])
+  date      DateTime @db.Date
+
+  @@unique([trainerId, date])
+  @@map("trainer_blocked_dates")
+}
+
+model PersonalSession {
+  id        String                @id @default(uuid()) @db.Uuid
+  trainerId String                @map("trainer_id") @db.Uuid
+  trainer   User                  @relation("PersonalSessionTrainer", fields: [trainerId], references: [id])
+  memberId  String                @map("member_id") @db.Uuid
+  member    User                  @relation("PersonalSessionMember", fields: [memberId], references: [id])
+  startsAt  DateTime              @map("starts_at")
+  endsAt    DateTime              @map("ends_at")
+  status    PersonalSessionStatus @default(SCHEDULED)
+  chargeId  String                @unique @map("charge_id") @db.Uuid
+  charge    Charge                @relation(fields: [chargeId], references: [id])
+  createdAt DateTime              @default(now()) @map("created_at")
+
+  review Review?
+
+  // H13: la BD impide el doble agendado aunque lleguen dos requests a la vez.
+  @@unique([trainerId, startsAt])
+  @@index([memberId])
+  @@map("personal_sessions")
+}

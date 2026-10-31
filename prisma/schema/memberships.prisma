@@ -1,0 +1,60 @@
+// Módulo 1 · Membresías y planes.
+
+enum PlanType {
+  MONTHLY
+  QUARTERLY
+  CLASS_PACK
+}
+
+// No se guarda en Membership (el estado se calcula). Se usa como snapshot
+// en CheckIn y como tipo de retorno del service.
+enum MembershipStatus {
+  ACTIVE
+  PENDING_PAYMENT
+  EXPIRED
+  NONE
+}
+
+model Plan {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String   @unique
+  type         PlanType
+  durationDays Int?     @map("duration_days") // MONTHLY / QUARTERLY
+  classCount   Int?     @map("class_count") // CLASS_PACK
+  price        Decimal  @db.Decimal(10, 2)
+  benefits     String[]
+  isActive     Boolean  @default(true) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  memberships Membership[]
+
+  @@map("plans")
+}
+
+// Estado calculado, no guardado:
+//   charge.status != PAID                      -> PENDING_PAYMENT
+//   endDate < hoy  ||  classesRemaining == 0   -> EXPIRED
+//   en otro caso                               -> ACTIVE
+model Membership {
+  id               String    @id @default(uuid()) @db.Uuid
+  memberId         String    @map("member_id") @db.Uuid
+  member           User      @relation("MembershipMember", fields: [memberId], references: [id])
+  planId           String    @map("plan_id") @db.Uuid
+  plan             Plan      @relation(fields: [planId], references: [id])
+  startDate        DateTime  @map("start_date") @db.Date
+  endDate          DateTime? @map("end_date") @db.Date // null en CLASS_PACK sin vencimiento
+  classesRemaining Int?      @map("classes_remaining") // solo CLASS_PACK
+  chargeId         String    @unique @map("charge_id") @db.Uuid
+  charge           Charge    @relation(fields: [chargeId], references: [id])
+  recordedById     String    @map("recorded_by_id") @db.Uuid
+  recordedBy       User      @relation("MembershipRecordedBy", fields: [recordedById], references: [id])
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  checkIns           CheckIn[]
+  consumedByBookings ClassReservation[]
+
+  @@index([memberId, startDate])
+  @@index([endDate])
+  @@map("memberships")
+}

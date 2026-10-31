@@ -1,0 +1,62 @@
+// Módulo 6 · Rutinas y seguimiento de progreso.
+
+model Routine {
+  id        String    @id @default(uuid()) @db.Uuid
+  name      String
+  trainerId String    @map("trainer_id") @db.Uuid
+  trainer   User      @relation("RoutineTrainer", fields: [trainerId], references: [id])
+  memberId  String    @map("member_id") @db.Uuid
+  member    User      @relation("RoutineMember", fields: [memberId], references: [id])
+  weekdays  Weekday[]
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  exercises RoutineExercise[]
+
+  @@index([memberId])
+  @@index([trainerId])
+  @@map("routines")
+}
+
+model RoutineExercise {
+  id                String   @id @default(uuid()) @db.Uuid
+  routineId         String   @map("routine_id") @db.Uuid
+  routine           Routine  @relation(fields: [routineId], references: [id], onDelete: Cascade)
+  position          Int
+  exerciseName      String   @map("exercise_name")
+  sets              Int
+  reps              Int
+  suggestedWeightKg Decimal? @map("suggested_weight_kg") @db.Decimal(6, 2)
+
+  @@unique([routineId, position])
+  @@map("routine_exercises")
+}
+
+model ProgressEntry {
+  id         String   @id @default(uuid()) @db.Uuid
+  memberId   String   @map("member_id") @db.Uuid
+  member     User     @relation(fields: [memberId], references: [id])
+  recordedOn DateTime @map("recorded_on") @db.Date
+  weightKg   Decimal  @map("weight_kg") @db.Decimal(5, 2)
+  chestCm    Decimal? @map("chest_cm") @db.Decimal(5, 1)
+  waistCm    Decimal? @map("waist_cm") @db.Decimal(5, 1)
+  armCm      Decimal? @map("arm_cm") @db.Decimal(5, 1)
+  isBaseline Boolean  @default(false) @map("is_baseline")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  personalBests PersonalBest[]
+
+  @@index([memberId, recordedOn])
+  @@map("progress_entries")
+}
+
+model PersonalBest {
+  id           String        @id @default(uuid()) @db.Uuid
+  entryId      String        @map("entry_id") @db.Uuid
+  entry        ProgressEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  exerciseName String        @map("exercise_name")
+  weightKg     Decimal       @map("weight_kg") @db.Decimal(6, 2)
+
+  @@unique([entryId, exerciseName])
+  @@map("personal_bests")
+}
