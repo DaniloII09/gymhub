@@ -1,7 +1,10 @@
-// Configuración de Prisma y enums compartidos por varios módulos.
+// Configuración de Prisma. Enums y modelos viven en los archivos por módulo.
+// Cada dueño de módulo (opción 1) agrega SUS tablas en su propio archivo.
 
 generator client {
-  provider               = "prisma-client"
+  provider = "prisma-client"
+
+  // La ruta sube dos niveles porque el schema vive en prisma/schema/.
   output                 = "../../src/generated/prisma"
   engineType             = "client"
   runtime                = "nodejs"
@@ -12,14 +15,4 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-}
-
-enum Weekday {
-  MONDAY
-  TUESDAY
-  WEDNESDAY
-  THURSDAY
-  FRIDAY
-  SATURDAY
-  SUNDAY
 }

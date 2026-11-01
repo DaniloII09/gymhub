@@ -1,56 +1,30 @@
-// Módulo 0 · Usuarios, autenticación y configuración del sistema.
+// Módulo 0 · Usuarios y autenticación. Base del boilerplate + rol.
+// Dueño del archivo: lo revisa Danilo. Solo se agrega lo imprescindible para
+// el control de acceso (el campo `role`). Los datos de perfil del miembro
+// (nombre, sexo, fecha de nacimiento, código, etc.) los agrega H01 en su rama.
 
 enum Role {
   MEMBER
   TRAINER
-  RECEPTIONIST
+  RECEPTION
   ADMIN
 }
 
 model User {
-  id                 String   @id @default(uuid()) @db.Uuid
-  email              String   @unique
-  passwordHash       String   @map("password_hash")
-  isActive           Boolean  @default(true) @map("is_active")
-  role               Role     @default(MEMBER)
-  fullName           String   @map("full_name")
-  phone              String?
-  memberCode         String?  @unique @map("member_code") // solo miembros
-  mustChangePassword Boolean  @default(false) @map("must_change_password")
-  createdAt          DateTime @default(now()) @map("created_at")
-  updatedAt          DateTime @updatedAt @map("updated_at")
+  id           String  @id @default(uuid()) @db.Uuid
+  email        String  @unique
+  passwordHash String  @map("password_hash")
+  role         Role    @default(MEMBER)
+  isActive     Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   refreshTokens RefreshToken[]
 
-  // M1
-  memberships               Membership[]          @relation("MembershipMember")
-  membershipsRecorded       Membership[]          @relation("MembershipRecordedBy")
-  // M4
-  checkIns                  CheckIn[]             @relation("CheckInMember")
-  checkInsRecorded          CheckIn[]             @relation("CheckInRecordedBy")
-  // M2
-  classesTaught             GroupClass[]
-  reservations              ClassReservation[]
-  // M3
-  availabilityBlocks        TrainerAvailability[]
-  blockedDates              TrainerBlockedDate[]
-  personalSessionsAsTrainer PersonalSession[]     @relation("PersonalSessionTrainer")
-  personalSessionsAsMember  PersonalSession[]     @relation("PersonalSessionMember")
-  // M5
-  charges                   Charge[]
-  paymentsRecorded          Payment[]             @relation("PaymentRecordedBy")
-  receiptsVoided            Receipt[]             @relation("ReceiptVoidedBy")
-  // M6
-  routinesCreated           Routine[]             @relation("RoutineTrainer")
-  routinesAssigned          Routine[]             @relation("RoutineMember")
-  progressEntries           ProgressEntry[]
-  // M7
-  machineStatusChanges      MachineStatusChange[]
-  // M8
-  reviewsWritten            Review[]              @relation("ReviewAuthor")
-  reviewsReceived           Review[]              @relation("ReviewTrainer")
-  // M9
-  notifications             Notification[]
+  // NOTA PARA EL EQUIPO: cuando tu modelo referencie a User (ej. Membership.member,
+  // GroupClass.trainer), agregá acá la relación opuesta. Este archivo tiene
+  // CODEOWNER = Danilo, así que ese cambio pasa por su revisión.
 
   @@index([role])
   @@map("users")
@@ -67,13 +41,4 @@ model RefreshToken {
 
   @@index([userId])
   @@map("refresh_tokens")
-}
-
-// Configuración editable por el admin (ej. PERSONAL_SESSION_PRICE).
-model Setting {
-  key       String   @id
-  value     String
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@map("settings")
 }
