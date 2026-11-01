@@ -4,19 +4,8 @@ import { IsNormalizedEmail } from '@Common/decorators';
 
 export class CreateUserDto {
   @ApiProperty({
-  description: 'Nombre completo del usuario.',
-  example: 'Juan Perez',
-  maxLength: 120,
-  })
-  @IsString()
-  @MinLength(1, { message: 'El nombre completo es obligatorio.' })
-  @MaxLength(120)
-  fullName!: string;
-
-
-  @ApiProperty({
     description: 'Email del usuario. Se normaliza a minúsculas y sin espacios.',
-    example: 'nestor@example.com',
+    example: 'juanperez@example.com',
     format: 'email',
     maxLength: 254,
   })
