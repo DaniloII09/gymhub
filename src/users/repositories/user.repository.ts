@@ -9,6 +9,8 @@ const UNIQUE_CONSTRAINT_VIOLATION = 'P2002';
 export interface CreateUserData {
   email: string;
   passwordHash: string;
+  fullName: string;
+  phone?: string;
 }
 
 /**
@@ -31,17 +33,17 @@ export class UserRepository {
    * insert. El código P2002 de Prisma se traduce a un error de dominio para
    * que la capa de servicio no tenga que conocer los códigos del ORM.
    */
-  async create({ email, passwordHash }: CreateUserData): Promise<User> {
+    async create(data: CreateUserData): Promise<User> {
     try {
       return await this.prisma.user.create({
-        data: { email: this.normalizeEmail(email), passwordHash },
+        data: { ...data, email: this.normalizeEmail(data.email) },
       });
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === UNIQUE_CONSTRAINT_VIOLATION
       ) {
-        throw new EmailAlreadyTakenError(email);
+        throw new EmailAlreadyTakenError(data.email);
       }
       throw error;
     }

@@ -1,0 +1,79 @@
+// Módulo 0 · Usuarios, autenticación y configuración del sistema.
+
+enum Role {
+  MEMBER
+  TRAINER
+  RECEPTIONIST
+  ADMIN
+}
+
+model User {
+  id                 String   @id @default(uuid()) @db.Uuid
+  email              String   @unique
+  passwordHash       String   @map("password_hash")
+  isActive           Boolean  @default(true) @map("is_active")
+  role               Role     @default(MEMBER)
+  fullName           String   @map("full_name")
+  phone              String?
+  memberCode         String?  @unique @map("member_code") // solo miembros
+  mustChangePassword Boolean  @default(false) @map("must_change_password")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  refreshTokens RefreshToken[]
+
+  // M1
+  memberships               Membership[]          @relation("MembershipMember")
+  membershipsRecorded       Membership[]          @relation("MembershipRecordedBy")
+  // M4
+  checkIns                  CheckIn[]             @relation("CheckInMember")
+  checkInsRecorded          CheckIn[]             @relation("CheckInRecordedBy")
+  // M2
+  classesTaught             GroupClass[]
+  reservations              ClassReservation[]
+  // M3
+  availabilityBlocks        TrainerAvailability[]
+  blockedDates              TrainerBlockedDate[]
+  personalSessionsAsTrainer PersonalSession[]     @relation("PersonalSessionTrainer")
+  personalSessionsAsMember  PersonalSession[]     @relation("PersonalSessionMember")
+  // M5
+  charges                   Charge[]
+  paymentsRecorded          Payment[]             @relation("PaymentRecordedBy")
+  receiptsVoided            Receipt[]             @relation("ReceiptVoidedBy")
+  // M6
+  routinesCreated           Routine[]             @relation("RoutineTrainer")
+  routinesAssigned          Routine[]             @relation("RoutineMember")
+  progressEntries           ProgressEntry[]
+  // M7
+  machineStatusChanges      MachineStatusChange[]
+  // M8
+  reviewsWritten            Review[]              @relation("ReviewAuthor")
+  reviewsReceived           Review[]              @relation("ReviewTrainer")
+  // M9
+  notifications             Notification[]
+
+  @@index([role])
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  userId    String    @map("user_id") @db.Uuid
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+// Configuración editable por el admin (ej. PERSONAL_SESSION_PRICE).
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
+}

@@ -23,13 +23,12 @@ export class UsersService {
     this.saltRounds = configService.get('BCRYPT_SALT_ROUNDS', { infer: true });
   }
 
-  async create({ email, password }: CreateUserDto): Promise<User> {
+    async create({ email, password, fullName }: CreateUserDto): Promise<User> {
     const passwordHash = await this.hashPassword(password);
 
     try {
-      return await this.userRepository.create({ email, passwordHash });
+      return await this.userRepository.create({ email, fullName, passwordHash });
     } catch (error) {
-      // Traduce el error de dominio del repositorio a una excepción HTTP.
       if (error instanceof EmailAlreadyTakenError) {
         throw new ConflictException('El email ya está registrado.');
       }
