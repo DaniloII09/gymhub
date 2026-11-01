@@ -1,25 +1,4 @@
-// Módulo 8 · Reseñas y calificaciones.
-
-// Exactamente uno de reservationId / personalSessionId (validado en service).
-// El @unique en cada FK impide calificar dos veces lo mismo.
-model Review {
-  id                String            @id @default(uuid()) @db.Uuid
-  authorId          String            @map("author_id") @db.Uuid
-  author            User              @relation("ReviewAuthor", fields: [authorId], references: [id])
-  rating            Int // 1..5
-  comment           String?           @db.VarChar(500)
-  reservationId     String?           @unique @map("reservation_id") @db.Uuid
-  reservation       ClassReservation? @relation(fields: [reservationId], references: [id])
-  personalSessionId String?           @unique @map("personal_session_id") @db.Uuid
-  personalSession   PersonalSession?  @relation(fields: [personalSessionId], references: [id])
-  // Desnormalizados para los promedios de H29 y la vista de H30.
-  trainerId         String            @map("trainer_id") @db.Uuid
-  trainer           User              @relation("ReviewTrainer", fields: [trainerId], references: [id])
-  groupClassId      String?           @map("group_class_id") @db.Uuid
-  groupClass        GroupClass?       @relation(fields: [groupClassId], references: [id])
-  createdAt         DateTime          @default(now()) @map("created_at")
-
-  @@index([trainerId, createdAt])
-  @@index([groupClassId, createdAt])
-  @@map("reviews")
-}
+// Épica 8 · Reseñas. Dueño: Christian (DB-30.1).
+// Agregá acá los modelos de tu módulo en tu feat branch. Si referencian a
+// User, agregá la relación opuesta en users.prisma (revisión de Danilo).
+// IDs: Int autoincrement para el dominio; los usuarios usan UUID.

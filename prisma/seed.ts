@@ -4,24 +4,21 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../src/generated/prisma/client.js';
 
 /**
- * Seed de desarrollo: una cuenta por rol para poder probar los permisos de
- * cada módulo sin tener que crear usuarios a mano.
+ * Seed de desarrollo: una cuenta por rol para probar los permisos del guard sin
+ * crear usuarios a mano. Todas comparten la contraseña a propósito: son datos
+ * de desarrollo, nunca se cargan en un ambiente real.
  *
- * Todas comparten la misma contraseña a propósito: son datos de desarrollo,
- * nunca se cargan en un ambiente real.
+ * El rol va como string (coincide con el enum Role del schema); `as const` hace
+ * que TypeScript lo valide. Los datos semilla del negocio (planes, clases de
+ * ejemplo, precios) los agrega cada dueño de módulo en su rama, no este seed.
  */
 const DEMO_PASSWORD = 'Demo1234!';
 
 const USERS = [
-  { email: 'admin@gymhub.test', fullName: 'Admin Demo', role: 'ADMIN' },
-  { email: 'recepcion@gymhub.test', fullName: 'Recepción Demo', role: 'RECEPTIONIST' },
-  { email: 'entrenador@gymhub.test', fullName: 'Entrenador Demo', role: 'TRAINER' },
-  {
-    email: 'miembro@gymhub.test',
-    fullName: 'Miembro Demo',
-    role: 'MEMBER',
-    memberCode: 'M-0001',
-  },
+  { email: 'admin@gymhub.test', role: 'ADMIN' },
+  { email: 'recepcion@gymhub.test', role: 'RECEPTION' },
+  { email: 'entrenador@gymhub.test', role: 'TRAINER' },
+  { email: 'miembro@gymhub.test', role: 'MEMBER' },
 ] as const;
 
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
@@ -37,7 +34,7 @@ async function main() {
       update: {},
       create: { ...user, passwordHash },
     });
-    console.log(`${user.role.padEnd(12)} ${user.email} / ${DEMO_PASSWORD}`);
+    console.log(`${user.role.padEnd(10)} ${user.email} / ${DEMO_PASSWORD}`);
   }
 }
 
