@@ -1,4 +1,4 @@
-// Épica 3 · Agenda de entrenadores. Dueño: Luis (DB-15.1, DB-15.2).
+// Épica 3 · Agenda de entrenadores. Dueño: Christian (DB-10.1), Luis (DB-11.1).
 // Agregá acá los modelos de tu módulo en tu feat branch. Si referencian a
 // User, agregá la relación opuesta en users.prisma (revisión de Danilo).
 // IDs: Int autoincrement para el dominio; los usuarios usan UUID.

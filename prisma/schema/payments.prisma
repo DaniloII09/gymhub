@@ -1,4 +1,4 @@
-// Épica 5 · Pagos y comprobantes. Dueño: Jaime (DB-20.1, DB-20.2).
+// Épica 5 · Pagos y comprobantes. Dueño: Jaime (DB-15.1).
 // Agregá acá los modelos de tu módulo en tu feat branch. Si referencian a
 // User, agregá la relación opuesta en users.prisma (revisión de Danilo).
 // IDs: Int autoincrement para el dominio; los usuarios usan UUID.

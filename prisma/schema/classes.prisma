@@ -1,4 +1,4 @@
-// Épica 2 · Clases grupales. Dueño: Luis (DB-9.1, DB-9.2).
+// Épica 2 · Clases grupales. Dueño: Luis (DB-6.1, DB-7.1).
 // Agregá acá los modelos de tu módulo en tu feat branch. Si referencian a
 // User, agregá la relación opuesta en users.prisma (revisión de Danilo).
 // IDs: Int autoincrement para el dominio; los usuarios usan UUID.
