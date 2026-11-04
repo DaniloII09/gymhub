@@ -1,4 +1,4 @@
-// Épica 6 · Rutinas y progreso. Dueño: Christian (DB-24.1, DB-26.1).
+// Épica 6 · Rutinas y progreso. Dueño: Christian (DB-18.1, DB-19.1).
 // Agregá acá los modelos de tu módulo en tu feat branch. Si referencian a
 // User, agregá la relación opuesta en users.prisma (revisión de Danilo).
 // IDs: Int autoincrement para el dominio; los usuarios usan UUID.

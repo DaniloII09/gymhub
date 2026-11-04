@@ -1,4 +1,4 @@
-// Épica 8 · Reseñas. Dueño: Christian (DB-30.1).
+// Épica 8 · Reseñas. Dueño: Christian (DB-22.1).
 // Agregá acá los modelos de tu módulo en tu feat branch. Si referencian a
 // User, agregá la relación opuesta en users.prisma (revisión de Danilo).
 // IDs: Int autoincrement para el dominio; los usuarios usan UUID.

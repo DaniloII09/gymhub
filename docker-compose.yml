@@ -43,7 +43,7 @@ services:
       PORT: 3000
       # Dentro de la red de Compose el host de la base es el nombre del
       # servicio (`postgres`), no `localhost`.
-      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-si_be_boilerplate}?schema=public
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-gymhub}?schema=public
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET es obligatorio, copiá .env.example a .env}
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
       REFRESH_TOKEN_EXPIRES_IN_DAYS: ${REFRESH_TOKEN_EXPIRES_IN_DAYS:-7}

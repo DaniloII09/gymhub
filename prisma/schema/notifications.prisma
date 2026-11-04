@@ -1,4 +1,4 @@
-// Épica 9 · Notificaciones. Dueño: Juan Carlos (DB-33.1, DB-34.1).
+// Épica 9 · Notificaciones. Dueño: Juan Carlos (DB-24.1, DB-26.1).
 // Agregá acá los modelos de tu módulo en tu feat branch. Si referencian a
 // User, agregá la relación opuesta en users.prisma (revisión de Danilo).
 // IDs: Int autoincrement para el dominio; los usuarios usan UUID.

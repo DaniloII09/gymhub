@@ -1,4 +1,4 @@
-import type { User } from '@PrismaClient';
+import type { User, Prisma } from '@PrismaClient';
 
 /**
  * Contrato del servicio central de notificaciones (Épica 9 · H33, dueño: Juan
@@ -16,21 +16,19 @@ export type NotificationSource =
   | 'PAYMENTS'
   | 'ROUTINES'
   | 'MACHINES'
-  | 'REVIEWS';
+  | 'REVIEWS'
+  | 'REPORTS';
 
 export interface NotifyInput {
-  userIds: User['id'][];
+  recipients: User['id'][];
   source: NotificationSource;
   title: string;
   message: string;
-  /** Ruta del front, ej. "/me/membership". Opcional. */
-  link?: string;
-  /** Clave de idempotencia opcional para no repetir el mismo aviso. */
-  dedupeKey?: string;
+  referenceId?: string;
 }
 
 export interface NotificationService {
-  notify(input: NotifyInput): Promise<void>;
+  notify(input: NotifyInput, tx: Prisma.TransactionClient): Promise<number>;
 }
 
 /** Token de inyección. El dueño del módulo registra el provider con este token. */
