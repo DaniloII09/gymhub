@@ -14,8 +14,18 @@ export type MembershipStatus =
   | 'EXPIRED'
   | 'NONE';
 
+export type PlanType = 'MONTHLY' | 'QUARTERLY' | 'DROP_IN';
+
+export interface CurrentMembership {
+  status: MembershipStatus;
+  planName: string | null;   // null cuando status es NONE
+  planType: PlanType | null;
+  endDate: Date | null;
+  daysLeft: number | null;
+}
+
 export interface MembershipStatusService {
-  getStatusForMember(memberId: string): Promise<MembershipStatus>;
+  currentFor(memberId: string): Promise<CurrentMembership>;
 }
 
 export const MEMBERSHIP_STATUS_SERVICE = Symbol('MembershipStatusService');
