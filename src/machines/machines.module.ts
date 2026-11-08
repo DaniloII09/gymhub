@@ -1,7 +1,11 @@
 import { Module } from '@nestjs/common';
+import { MachinesController } from '@Machines/controllers';
+import { MachinesService } from '@Machines/services';
+import { MachineRepository } from '@Machines/repositories';
 
 // Épica 7 · Máquinas. Dueño: Juan Carlos.
-// Esqueleto. Agregá controllers/, services/, repositories/ y dto/ a medida que
-// los creés, y declaralos acá. Usá el módulo de usuarios como referencia.
-@Module({})
+@Module({
+  controllers: [MachinesController],
+  providers: [MachinesService, MachineRepository],
+})
 export class MachinesModule {}

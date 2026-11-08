@@ -21,6 +21,22 @@ const USERS = [
   { email: 'miembro@gymhub.test', role: 'MEMBER' },
 ] as const;
 
+/**
+ * Inventario de máquinas (DB-20.1): 8 máquinas, 2 por área, todas operativas.
+ * En esta versión no hay pantalla para dar de alta máquinas, así que el
+ * inventario entra solo por este seed. Se identifican por `code`, que es único.
+ */
+const MACHINES = [
+  { code: 'CAR-001', name: 'Caminadora 1', area: 'CARDIO' },
+  { code: 'CAR-002', name: 'Bicicleta estática 1', area: 'CARDIO' },
+  { code: 'FUE-001', name: 'Prensa de piernas', area: 'STRENGTH' },
+  { code: 'FUE-002', name: 'Polea alta', area: 'STRENGTH' },
+  { code: 'PLI-001', name: 'Banco plano con barra', area: 'FREE_WEIGHTS' },
+  { code: 'PLI-002', name: 'Rack de mancuernas', area: 'FREE_WEIGHTS' },
+  { code: 'FUN-001', name: 'Rack de sentadillas', area: 'FUNCTIONAL' },
+  { code: 'FUN-002', name: 'Remo funcional', area: 'FUNCTIONAL' },
+] as const;
+
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
@@ -36,6 +52,16 @@ async function main() {
     });
     console.log(`${user.role.padEnd(10)} ${user.email} / ${DEMO_PASSWORD}`);
   }
+
+  for (const machine of MACHINES) {
+    // `update: {}` no pisa el estado de una máquina que ya se usó en pruebas.
+    await prisma.machine.upsert({
+      where: { code: machine.code },
+      update: {},
+      create: machine,
+    });
+  }
+  console.log(`${MACHINES.length} máquinas en el inventario`);
 }
 
 try {
