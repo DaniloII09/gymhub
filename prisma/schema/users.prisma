@@ -25,6 +25,10 @@ model User {
   // Épica 7 · Máquinas (H20): cambios de estado que registró este usuario.
   machineStatusChanges MachineStatusChange[]
 
+  // Épica 5 · Pagos (H15): cobros de este miembro y pagos que registró.
+  charges            Charge[]  @relation("ChargeMember")
+  registeredPayments Payment[] @relation("PaymentRegisteredBy")
+
   // NOTA PARA EL EQUIPO: cuando tu modelo referencie a User (ej. Membership.member,
   // GroupClass.trainer), agregá acá la relación opuesta. Este archivo tiene
   // CODEOWNER = Danilo, así que ese cambio pasa por su revisión.

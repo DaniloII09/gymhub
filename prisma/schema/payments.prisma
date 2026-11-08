@@ -1,4 +1,90 @@
 // Épica 5 · Pagos y comprobantes. Dueño: Jaime (DB-15.1).
-// Agregá acá los modelos de tu módulo en tu feat branch. Si referencian a
-// User, agregá la relación opuesta en users.prisma (revisión de Danilo).
+// Cobros, intentos de pago y comprobantes (H15). Nada se borra: los cobros,
+// los pagos y los comprobantes son permanentes, por eso las relaciones usan
+// onDelete: Restrict.
 // IDs: Int autoincrement para el dominio; los usuarios usan UUID.
+
+enum ChargeType {
+  MEMBERSHIP
+  PERSONAL_SESSION
+  DROP_IN
+}
+
+enum ChargeStatus {
+  PENDING
+  PAID
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+}
+
+enum PaymentResult {
+  APPROVED
+  DECLINED
+}
+
+/// Lo que un miembro debe pagar. Lo crean otros módulos con el contrato
+/// CHARGES_SERVICE (H04 al vender una membresía, H11 al agendar una sesión).
+/// El monto siempre es mayor que 0 (CHECK en la migración).
+model Charge {
+  id           Int          @id @default(autoincrement())
+  memberId     String       @map("member_id") @db.Uuid
+  type         ChargeType
+  concept      String       @db.VarChar(80)
+  amount       Decimal      @db.Decimal(8, 2)
+  dueDate      DateTime     @map("due_date") @db.Date
+  status       ChargeStatus @default(PENDING)
+  /// Membresía que origina el cobro (H04). La relación se agrega cuando exista Membership.
+  membershipId Int?         @unique @map("membership_id")
+  paidAt       DateTime?    @map("paid_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  member   User      @relation("ChargeMember", fields: [memberId], references: [id], onDelete: Restrict)
+  payments Payment[]
+  receipt  Receipt?
+
+  @@index([memberId, status])
+  @@map("charges")
+}
+
+/// Cada intento de pago, aprobado o rechazado. Nunca guarda el número completo
+/// de la tarjeta ni el CVV: solo los últimos 4 dígitos.
+model Payment {
+  id             Int           @id @default(autoincrement())
+  chargeId       Int           @map("charge_id")
+  method         PaymentMethod
+  result         PaymentResult
+  declineReason  String?       @map("decline_reason") @db.VarChar(120)
+  cardLast4      String?       @map("card_last4") @db.Char(4)
+  /// Generado por el frontend: la misma clave nunca cobra dos veces.
+  idempotencyKey String        @unique @map("idempotency_key") @db.Uuid
+  registeredById String        @map("registered_by_id") @db.Uuid
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  charge       Charge   @relation(fields: [chargeId], references: [id], onDelete: Restrict)
+  registeredBy User     @relation("PaymentRegisteredBy", fields: [registeredById], references: [id], onDelete: Restrict)
+  receipt      Receipt?
+
+  @@index([chargeId])
+  @@map("payments")
+}
+
+/// Comprobante de un pago aprobado. `chargeId` es único: un cobro tiene como
+/// máximo un comprobante, así que la base rechaza un segundo pago aprobado.
+/// El número sale del id: el comprobante 7 es C-000007.
+model Receipt {
+  id        Int      @id @default(autoincrement())
+  number    String   @unique @db.VarChar(10)
+  paymentId Int      @unique @map("payment_id")
+  chargeId  Int      @unique @map("charge_id")
+  issuedAt  DateTime @default(now()) @map("issued_at")
+
+  payment Payment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  charge  Charge  @relation(fields: [chargeId], references: [id], onDelete: Restrict)
+
+  @@map("receipts")
+}
