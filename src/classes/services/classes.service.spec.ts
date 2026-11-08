@@ -296,7 +296,12 @@ describe('ClassesService', () => {
 });
 
 describe('ClassRepository · reglas transaccionales', () => {
-  it('rechaza bajar el cupo de 20 a 10 cuando hay 12 reservas confirmadas sin modificar la clase', async () => {
+  it('devuelve 0 en countConfirmedReservations mientras falte el modelo de reservas de H07 (DB-7.1)', async () => {
+    const repo = new ClassRepository({} as unknown as PrismaService);
+    await expect(repo.countConfirmedReservations(1)).resolves.toBe(0);
+  });
+
+  it('al simular 12 reservas confirmadas, rechaza bajar el cupo de 20 a 10 sin modificar la clase', async () => {
     const existing = sampleClass({ capacity: 20 });
     const tx = {
       $queryRaw: vi.fn().mockResolvedValue([{ id: existing.id }]),
@@ -322,3 +327,4 @@ describe('ClassRepository · reglas transaccionales', () => {
     expect(tx.gymClass.update).not.toHaveBeenCalled();
   });
 });
+

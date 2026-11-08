@@ -170,9 +170,14 @@ export class ClassRepository {
   /**
    * Cuenta las reservas confirmadas de la clase.
    *
-   * Dependencia pendiente (DB-7.1 / H07): el modelo de reservas de clase aún no
-   * existe en `prisma/schema/classes.prisma`. Cuando se integre DB-7.1, este
-   * método consultará `tx.classReservation.count({ where: { classId, status: 'CONFIRMED' } })`.
+   * LÍMITE ACTUAL (pendiente de DB-7.1 / H07): el modelo de reservas de clase
+   * aún no existe en `prisma/schema/classes.prisma`, por lo que este método
+   * devuelve `0` de forma provisional y en la base real todavía no impide bajar
+   * el cupo frente a reservas reales.
+   *
+   * Qué funcionará al integrar H07 (DB-7.1): se reemplazará el retorno `0` por
+   * `tx.classReservation.count({ where: { classId, status: 'CONFIRMED' } })`
+   * dentro de la misma transacción con bloqueo `FOR UPDATE`.
    */
   countConfirmedReservations(
     _classId: number,
@@ -207,9 +212,15 @@ export class ClassRepository {
    * si `B_start < A_end` y `B_end > A_start`. Si una clase termina exactamente
    * cuando empieza la otra (`B_end == A_start` o `B_start == A_end`), NO hay cruce.
    *
-   * Dependencia pendiente (DB-11.1 / H11): el modelo de sesiones personales aún
-   * no existe en `prisma/schema/trainers.prisma`. Cuando se integre DB-11.1, se
-   * agregará aquí la consulta equivalente sobre las sesiones personales activas.
+   * LÍMITE ACTUAL (pendiente de DB-11.1 / H11): este método solo comprueba
+   * cruces contra otras clases grupales (`gym_classes`). La detección de cruces
+   * contra sesiones personales del entrenador NO está activa todavía porque el
+   * modelo de sesiones personales aún no existe en `prisma/schema/trainers.prisma`.
+   *
+   * Qué funcionará al integrar H11 (DB-11.1): se agregará en este método la
+   * consulta `tx.personalSession.findFirst` con la misma condición de solapamiento
+   * (`startsAt < endsAt && endsAt > startsAt`) para lanzar
+   * `TrainerScheduleConflictError({ kind: 'PERSONAL_SESSION', ... })`.
    */
   private async assertNoTrainerOverlap(
     tx: Prisma.TransactionClient,
@@ -244,3 +255,4 @@ export class ClassRepository {
     }
   }
 }
+

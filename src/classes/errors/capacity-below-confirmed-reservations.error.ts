@@ -6,3 +6,4 @@ export class CapacityBelowConfirmedReservationsError extends Error {
     this.name = 'CapacityBelowConfirmedReservationsError';
   }
 }
+

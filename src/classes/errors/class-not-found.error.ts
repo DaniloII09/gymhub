@@ -4,3 +4,4 @@ export class ClassNotFoundError extends Error {
     this.name = 'ClassNotFoundError';
   }
 }
+

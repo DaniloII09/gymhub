@@ -52,7 +52,7 @@ export class ClassesController {
   })
   @ApiConflictResponse({
     description:
-      'El entrenador ya tiene asignada otra clase o sesión en ese horario.',
+      'El entrenador ya tiene asignada otra clase grupal en ese horario (cruce con sesiones personales pendiente de H11).',
   })
   async create(@Body() dto: CreateClassDto): Promise<ClassResponseDto> {
     const created = await this.classesService.create(dto);
@@ -75,7 +75,7 @@ export class ClassesController {
   })
   @ApiConflictResponse({
     description:
-      'Cruce de horario del entrenador o nuevo cupo menor a las reservas confirmadas.',
+      'Cruce de horario con otra clase grupal del entrenador o nuevo cupo menor a las reservas confirmadas (conteo real en BD pendiente de H07; cruce con sesiones personales pendiente de H11).',
   })
   async update(
     @Param('classId', ParseIntPipe) classId: number,
@@ -101,7 +101,7 @@ export class ClassesController {
   })
   @ApiConflictResponse({
     description:
-      'Cruce de horario del entrenador o nuevo cupo menor a las reservas confirmadas.',
+      'Cruce de horario con otra clase grupal del entrenador o nuevo cupo menor a las reservas confirmadas (conteo real en BD pendiente de H07; cruce con sesiones personales pendiente de H11).',
   })
   async replace(
     @Param('classId', ParseIntPipe) classId: number,
@@ -111,3 +111,4 @@ export class ClassesController {
     return ClassResponseDto.fromEntity(updated);
   }
 }
+

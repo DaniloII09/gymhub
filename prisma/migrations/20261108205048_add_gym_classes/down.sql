@@ -15,3 +15,4 @@ DROP TYPE "ClassStatus";
 
 -- Olvida la migración en el historial de Prisma.
 DELETE FROM "_prisma_migrations" WHERE "migration_name" = '20261108205048_add_gym_classes';
+

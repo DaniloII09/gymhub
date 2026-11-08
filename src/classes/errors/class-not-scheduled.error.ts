@@ -4,3 +4,4 @@ export class ClassNotScheduledError extends Error {
     this.name = 'ClassNotScheduledError';
   }
 }
+

@@ -4,3 +4,4 @@ export class InvalidTrainerRoleError extends Error {
     this.name = 'InvalidTrainerRoleError';
   }
 }
+

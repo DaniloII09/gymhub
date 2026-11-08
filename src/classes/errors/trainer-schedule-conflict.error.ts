@@ -26,3 +26,4 @@ export class TrainerScheduleConflictError extends Error {
     this.name = 'TrainerScheduleConflictError';
   }
 }
+

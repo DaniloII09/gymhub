@@ -12,24 +12,47 @@
 
 ---
 
-## Reglas de negocio (H06)
+## Reglas de negocio y estado real de cada criterio de H06
 
-1. **Control de acceso (Criterio 6):**
+1. **Control de acceso y rol de entrenador (Criterio 6 — Completo):**
    - Solo un usuario con rol `ADMIN` puede crear o editar clases grupales (`@Roles('ADMIN')` + `RolesGuard`).
    - El usuario asignado en `trainerId` debe existir en `users`, estar activo (`isActive = true`) y tener rol `TRAINER`.
-2. **Límites de entrada (Criterios 1 y 4):**
+2. **Límites de entrada (Criterios 1 y 4 — Completo en BD/API, pendiente calendario H07):**
    - `name`: cadena recortada (`trim`) de **3 a 60 caracteres**.
    - `capacity`: entero entre **1 y 50** (validado en DTO, servicio y restricción `CHECK ("capacity" >= 1 AND "capacity" <= 50)` en PostgreSQL).
    - `startsAt`: fecha y hora futuras (`startsAt > now`).
    - `endsAt`: posterior a `startsAt` (`CHECK ("ends_at" > "starts_at")` en PostgreSQL) y con una duración entre **30 y 180 minutos**.
-3. **Detección de cruces y horarios contiguos (Criterio 5):**
+   - La aparición en el calendario de reservas depende de la historia **H07 (`BE-7.1`)**.
+3. **Detección de cruces y horarios contiguos (Criterio 5 — Parcial: completo entre clases grupales, pendiente contra sesiones personales de H11):**
    - Dos intervalos `[startsAt, endsAt)` y `[other.startsAt, other.endsAt)` se cruzan sí y solo si `other.startsAt < endsAt` y `other.endsAt > startsAt`.
-   - Una clase de `18:00` a `18:50` se cruza con otra del mismo entrenador que inicia a las `18:30` y devuelve **HTTP 409 Conflict** indicando el nombre y horario de la clase en conflicto.
+   - Una clase de `18:00` a `18:50` se cruza con otra clase grupal del mismo entrenador que inicia a las `18:30` y devuelve **HTTP 409 Conflict** indicando el nombre y horario de la clase en conflicto.
    - Si una clase termina exactamente cuando empieza otra (`18:00` y `18:00`), **NO hay cruce**.
-4. **Reducción de cupo (Criterios 2 y 3):**
-   - En una clase `SCHEDULED`, se bloquea la fila con `SELECT … FOR UPDATE` dentro de la transacción y se compara el nuevo `capacity` con las reservas confirmadas (`confirmedReservations`).
-   - Si `capacity < confirmedReservations` (por ejemplo, bajar de 20 a 10 con 12 reservas confirmadas), se rechaza con **HTTP 409 Conflict** sin modificar la clase y con el mensaje exacto:
+   - **Límite actual:** La detección de cruces con **sesiones personales** del entrenador **sigue pendiente** porque aún no existe el modelo de sesiones personales (**H11 / `DB-11.1`**) en `prisma/schema/trainers.prisma`.
+4. **Reducción de cupo y reservas confirmadas (Criterios 2 y 3 — Parcial: regla preparada, conteo real en BD pendiente de H07):**
+   - En una clase `SCHEDULED`, `ClassRepository.update` bloquea la fila con `SELECT … FOR UPDATE` dentro de la transacción y compara el nuevo `capacity` con el resultado de `countConfirmedReservations(classId, tx)`.
+   - Si `capacity < confirmedReservations`, rechaza con **HTTP 409 Conflict** sin modificar la clase y con el mensaje exacto:
      `"El cupo no puede ser menor a las 12 reservas confirmadas."`
+   - **Límite actual:** `countConfirmedReservations()` **todavía devuelve `0`** porque falta el modelo de reservas de clases (**H07 / `DB-7.1`**) en `prisma/schema/classes.prisma`. Las pruebas actuales que simulan 12 reservas mediante `vi.spyOn` solo verifican la lógica de comparación y el formato del error `409`, pero **no demuestran que el conteo funcione con datos reales en base de datos**.
+
+---
+
+## Qué funcionará exactamente cuando se integren H07 y H11
+
+### 1. Al integrar H07 (`DB-7.1` y `BE-7.1`)
+- En `prisma/schema/classes.prisma` existirá el modelo de reservas de clases (con relación a `GymClass` y estado `CONFIRMED`).
+- En `ClassRepository.countConfirmedReservations(classId, tx)` (`src/classes/repositories/class.repository.ts`), se reemplazará `return Promise.resolve(0)` por:
+  ```ts
+  return (tx ?? this.prisma).classReservation.count({
+    where: { classId, status: 'CONFIRMED' },
+  });
+  ```
+- Con ese único cambio, dado que `ClassRepository.update` ya ejecuta `SELECT id FROM gym_classes WHERE id = ${classId} FOR UPDATE` y valida `nextCapacity < confirmedReservations` dentro de la misma transacción, la reducción de cupo quedará protegida contra reservas reales en PostgreSQL y `ClassResponseDto.confirmedReservations` devolverá el conteo real.
+- Además, el endpoint de calendario semanal de `BE-7.1` expondrá las clases `SCHEDULED` creadas por H06.
+
+### 2. Al integrar H11 (`DB-11.1`)
+- En `prisma/schema/trainers.prisma` existirá el modelo de sesiones personales del entrenador con su rango horario.
+- En `ClassRepository.assertNoTrainerOverlap(tx, params)` (`src/classes/repositories/class.repository.ts`), inmediatamente después de la consulta a `tx.gymClass.findFirst`, se agregará la consulta de solapamiento sobre las sesiones personales activas del mismo `trainerId` (`startsAt < params.endsAt && endsAt > params.startsAt`).
+- Si existe una sesión personal en ese rango, se lanzará `new TrainerScheduleConflictError({ kind: 'PERSONAL_SESSION', id: session.id, startsAt: session.startsAt, endsAt: session.endsAt })`, que `ClassesService` ya traduce automáticamente a **HTTP 409 Conflict** indicando con qué sesión personal hay conflicto.
 
 ---
 
@@ -81,9 +104,10 @@ sequenceDiagram
     Repo->>DB: BEGIN TRANSACTION
     Repo->>DB: Verifica User(trainerId) existe y role == TRAINER
     Repo->>DB: Busca GymClass SCHEDULED con startsAt < endsAt AND endsAt > startsAt
+    Note over Repo,DB: Pendiente H11 (DB-11.1): consulta de cruce contra sesiones personales
     alt Hay cruce de horario
         Repo-->>Svc: TrainerScheduleConflictError
-        Svc-->>Admin: 409 Conflict (indica clase y horario en conflicto)
+        Svc-->>Admin: 409 Conflict (indica clase en conflicto)
     else Sin cruce
         Repo->>DB: INSERT INTO gym_classes (status = SCHEDULED)
         Repo->>DB: COMMIT
@@ -152,18 +176,5 @@ El repositorio actual (`gymhub`) contiene únicamente el backend API; el proyect
 | `400 Bad Request` | Validación de nombre, cupo, fecha pasada, duración o rol del entrenador | `"La duración de la clase debe ser de entre 30 y 180 minutos."` |
 | `403 Forbidden` | Usuario autenticado sin rol `ADMIN` | `"No tenés permiso para esta acción."` |
 | `404 Not Found` | Clase o entrenador inexistente | `"No encontramos esa clase."` |
-| `409 Conflict` | Reducción de cupo por debajo de reservas confirmadas | `"El cupo no puede ser menor a las 12 reservas confirmadas."` |
-| `409 Conflict` | Cruce de horario del entrenador con otra clase o sesión | `"El entrenador ya tiene asignada la clase \"Spinning 18:00\" (18:00 a 18:50) que se cruza con ese horario."` |
-
----
-
-## Bloqueos y dependencias pendientes de otras historias
-
-1. **Conteo real de reservas confirmadas en BD (`DB-7.1 / H07`):**
-   - `ClassRepository.countConfirmedReservations(classId, tx)` está preparado e integrado en el flujo transaccional de edición (`SELECT ... FOR UPDATE`), pero devuelve `0` hasta que **DB-7.1 (H07)** agregue la tabla de reservas de clases (`ClassReservation`) en `prisma/schema/classes.prisma`.
-2. **Validación de cruce contra sesiones personales (`DB-11.1 / H11`):**
-   - `TrainerScheduleConflictError` ya soporta conflictos de tipo `PERSONAL_SESSION`, pero la consulta en base de datos dentro de `ClassRepository.assertNoTrainerOverlap` depende de que **DB-11.1 (H11)** agregue el modelo `PersonalSession` en `prisma/schema/trainers.prisma`.
-3. **Interfaz de administración (`SCRUM-75 / FE-6.1`):**
-   - Bloqueada porque el repositorio del frontend no está presente en este workspace y además depende de **BE-7.1** (endpoint de calendario semanal de H07) y **FE-2.2** (protección de rutas/menú por rol).
-4. **Pruebas de QA en ambiente desplegado (`SCRUM-76 / QA-6.1`):**
-   - Corresponden a Juan Carlos una vez estén integrados DB-6.1, BE-6.1 y FE-6.1 en el ambiente desplegado.
+| `409 Conflict` | Reducción de cupo por debajo de reservas confirmadas *(activo con datos reales al integrar H07)* | `"El cupo no puede ser menor a las 12 reservas confirmadas."` |
+| `409 Conflict` | Cruce de horario del entrenador con otra clase *(o sesión personal al integrar H11)* | `"El entrenador ya tiene asignada la clase \"Spinning 18:00\" (18:00 a 18:50) que se cruza con ese horario."` |

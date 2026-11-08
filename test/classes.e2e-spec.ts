@@ -293,7 +293,7 @@ describe('Clases grupales · H06 (e2e)', () => {
     }).expect(201);
   });
 
-  it('Criterio 2 y 3 (BE-6.1): con 12 reservas confirmadas, bajar el cupo de 20 a 10 devuelve 409 y conserva 20; cambiarlo a 12 o 30 se permite (200)', async () => {
+  it('Criterio 2 y 3 (parcial, simulando conteo hasta integrar DB-7.1 / H07): sin H07 countConfirmedReservations devuelve 0; al simular 12 reservas con spyOn, bajar de 20 a 10 devuelve 409 y conserva 20', async () => {
     const created = await createClass(adminToken, {
       name: `${NAME_PREFIX} Control de Cupo`,
       trainerId,
@@ -303,6 +303,12 @@ describe('Clases grupales · H06 (e2e)', () => {
 
     const classId = created.body.id as number;
 
+    // Sin spyOn, el repositorio devuelve 0 porque aún no existe el modelo de reservas de H07.
+    await expect(
+      classRepository.countConfirmedReservations(classId),
+    ).resolves.toBe(0);
+
+    // Se simula el retorno de 12 reservas para verificar únicamente la regla de rechazo en el servicio/repositorio.
     const spy = vi
       .spyOn(classRepository, 'countConfirmedReservations')
       .mockResolvedValue(12);
@@ -378,3 +384,4 @@ describe('Clases grupales · H06 (e2e)', () => {
     ).rejects.toThrow();
   });
 });
+

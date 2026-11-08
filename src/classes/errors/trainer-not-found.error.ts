@@ -4,3 +4,4 @@ export class TrainerNotFoundError extends Error {
     this.name = 'TrainerNotFoundError';
   }
 }
+

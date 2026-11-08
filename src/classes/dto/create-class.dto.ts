@@ -175,3 +175,4 @@ export class CreateClassDto {
   @Max(CLASS_CAPACITY_MAX, { message: CLASS_CAPACITY_RANGE_MESSAGE })
   capacity!: number;
 }
+

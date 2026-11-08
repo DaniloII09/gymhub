@@ -126,3 +126,4 @@ describe('CreateClassDto', () => {
     ).resolves.toEqual([INVALID_TRAINER_UUID_MESSAGE]);
   });
 });
+
