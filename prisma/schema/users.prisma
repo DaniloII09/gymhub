@@ -38,6 +38,9 @@ model User {
   // Épica 7 · Máquinas (H20): cambios de estado que registró este usuario.
   machineStatusChanges MachineStatusChange[]
 
+  // Épica 5 · Pagos (H15): cobros de este miembro y pagos que registró.
+  charges            Charge[]  @relation("ChargeMember")
+  registeredPayments Payment[] @relation("PaymentRegisteredBy")
   // Épica 3 · Agenda de entrenadores personales (H10): bloques de disponibilidad.
   availabilityBlocks AvailabilityBlock[]
 

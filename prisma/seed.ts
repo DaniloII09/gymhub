@@ -45,6 +45,33 @@ const MACHINES = [
   { code: 'FUN-002', name: 'Remo funcional', area: 'FUNCTIONAL' },
 ] as const;
 
+/**
+ * Cobros de prueba (DB-15.1) para miembro@gymhub.test: 2 pendientes y 1 pagado
+ * con su comprobante. Se identifican por concepto para no duplicarlos.
+ */
+const CHARGES_MEMBER_EMAIL = 'miembro@gymhub.test';
+const PENDING_CHARGES = [
+  {
+    type: 'MEMBERSHIP',
+    concept: 'Membresía Mensual (prueba)',
+    amount: 25,
+    daysToDue: 3,
+  },
+  {
+    type: 'PERSONAL_SESSION',
+    concept: 'Sesión personal (prueba)',
+    amount: 15,
+    daysToDue: 5,
+  },
+] as const;
+const PAID_CHARGE = {
+  type: 'DROP_IN',
+  concept: 'Clase suelta (prueba)',
+  amount: 5,
+} as const;
+/** Clave fija del pago de prueba: hace idempotente esta parte del seed. */
+const PAID_CHARGE_KEY = '00000000-0000-4000-8000-000000000015';
+
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
@@ -94,6 +121,72 @@ async function main() {
   }
   console.log(`${MACHINES.length} máquinas en el inventario`);
 
+  await seedCharges();
+}
+
+async function seedCharges() {
+  const member = await prisma.user.findUniqueOrThrow({
+    where: { email: CHARGES_MEMBER_EMAIL },
+  });
+  const today = new Date();
+  const inDays = (days: number) =>
+    new Date(
+      Date.UTC(today.getFullYear(), today.getMonth(), today.getDate() + days),
+    );
+
+  for (const { daysToDue, ...charge } of PENDING_CHARGES) {
+    const exists = await prisma.charge.count({
+      where: { memberId: member.id, concept: charge.concept },
+    });
+    if (!exists) {
+      await prisma.charge.create({
+        data: { ...charge, memberId: member.id, dueDate: inDays(daysToDue) },
+      });
+    }
+  }
+
+  const alreadyPaid = await prisma.payment.count({
+    where: { idempotencyKey: PAID_CHARGE_KEY },
+  });
+  if (!alreadyPaid) {
+    const admin = await prisma.user.findUniqueOrThrow({
+      where: { email: 'recepcion@gymhub.test' },
+    });
+    await prisma.$transaction(async (tx) => {
+      const charge = await tx.charge.create({
+        data: {
+          ...PAID_CHARGE,
+          memberId: member.id,
+          dueDate: inDays(0),
+          status: 'PAID',
+          paidAt: today,
+        },
+      });
+      const payment = await tx.payment.create({
+        data: {
+          chargeId: charge.id,
+          method: 'CASH',
+          result: 'APPROVED',
+          idempotencyKey: PAID_CHARGE_KEY,
+          registeredById: admin.id,
+        },
+      });
+      // Mismo criterio que PaymentRepository: el número sale del id.
+      const [{ next }] = await tx.$queryRaw<{ next: bigint }[]>`
+        SELECT nextval(pg_get_serial_sequence('receipts', 'id')) AS next`;
+      await tx.receipt.create({
+        data: {
+          id: Number(next),
+          number: `C-${String(next).padStart(6, '0')}`,
+          paymentId: payment.id,
+          chargeId: charge.id,
+        },
+      });
+    });
+  }
+  console.log(
+    `cobros de prueba para ${CHARGES_MEMBER_EMAIL}: 2 pendientes y 1 pagado`,
+  );
   /**
    * Bloques de disponibilidad (DB-10.1 / H10): bloques de ejemplo para entrenadores.
    */
