@@ -31,6 +31,7 @@ const change: MachineStatusChangeWithAuthor = {
 describe('MachinesService', () => {
   let repository: {
     findPage: ReturnType<typeof vi.fn>;
+    findAvailability: ReturnType<typeof vi.fn>;
     existsById: ReturnType<typeof vi.fn>;
     changeStatus: ReturnType<typeof vi.fn>;
     findHistory: ReturnType<typeof vi.fn>;
@@ -40,11 +41,45 @@ describe('MachinesService', () => {
   beforeEach(() => {
     repository = {
       findPage: vi.fn(),
+      findAvailability: vi.fn(),
       existsById: vi.fn(),
       changeStatus: vi.fn(),
       findHistory: vi.fn(),
     };
     service = new MachinesService(repository as unknown as MachineRepository);
+  });
+
+  describe('availability', () => {
+    it('pasa los filtros de área y estado al repositorio', async () => {
+      repository.findAvailability.mockResolvedValue([]);
+
+      await service.availability({ area: 'CARDIO', status: 'OUT_OF_SERVICE' });
+
+      expect(repository.findAvailability).toHaveBeenCalledWith({
+        area: 'CARDIO',
+        status: 'OUT_OF_SERVICE',
+      });
+    });
+
+    it('sin filtros consulta todas las máquinas', async () => {
+      repository.findAvailability.mockResolvedValue([]);
+
+      await service.availability({});
+
+      expect(repository.findAvailability).toHaveBeenCalledWith({
+        area: undefined,
+        status: undefined,
+      });
+    });
+
+    it('devuelve las máquinas tal como las entrega el repositorio', async () => {
+      const machines = [
+        { name: 'Caminadora 1', area: 'CARDIO', status: 'OPERATIONAL' },
+      ];
+      repository.findAvailability.mockResolvedValue(machines);
+
+      await expect(service.availability({})).resolves.toBe(machines);
+    });
   });
 
   describe('list', () => {
