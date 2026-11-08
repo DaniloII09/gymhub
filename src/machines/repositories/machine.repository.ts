@@ -25,6 +25,14 @@ export interface ChangeMachineStatusData {
   changedById: string;
 }
 
+export interface FindAvailabilityData {
+  area?: MachineArea;
+  status?: MachineStatus;
+}
+
+/** Datos públicos de una máquina: sin id, motivo ni autor (H21). */
+export type MachineAvailability = Pick<Machine, 'name' | 'area' | 'status'>;
+
 /** Cambio de estado con el correo de quien lo hizo. */
 export type MachineStatusChangeWithAuthor = MachineStatusChange & {
   changedBy: { email: string };
@@ -58,6 +66,22 @@ export class MachineRepository {
       this.prisma.machine.count({ where }),
     ]);
     return { machines, total };
+  }
+
+  /**
+   * Máquinas visibles para cualquier usuario, ordenadas por área y nombre.
+   * Se lee de la base en cada llamada, sin caché, para que un cambio de estado
+   * se vea en la siguiente consulta.
+   */
+  findAvailability({
+    area,
+    status,
+  }: FindAvailabilityData): Promise<MachineAvailability[]> {
+    return this.prisma.machine.findMany({
+      where: { area, status },
+      orderBy: [{ area: 'asc' }, { name: 'asc' }],
+      select: { name: true, area: true, status: true },
+    });
   }
 
   existsById(id: number): Promise<boolean> {
