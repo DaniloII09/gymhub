@@ -10,15 +10,28 @@ enum Role {
   ADMIN
 }
 
-model User {
-  id           String  @id @default(uuid()) @db.Uuid
-  email        String  @unique
-  passwordHash String  @map("password_hash")
-  role         Role    @default(MEMBER)
-  isActive     Boolean @default(true) @map("is_active")
+enum Sex { 
+  M 
+  F 
+}
 
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+model User {
+  id        String    @id @default(uuid()) @db.Uuid
+  fullName  String    @db.VarChar(100)
+  sex       Sex?
+  birthDate DateTime? @db.Date
+  email     String    @unique
+
+  passwordHash       String    @map("password_hash")
+  mustChangePassword Boolean   @default(false)
+  role               Role      @default(MEMBER)
+  isActive           Boolean   @default(true) @map("is_active")
+  enrolledAt         DateTime? @db.Date
+  memberCode         String?   @unique @db.VarChar(10)
+
+  createdById String?  @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   refreshTokens RefreshToken[]
 

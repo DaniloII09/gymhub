@@ -1,17 +1,10 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import bcrypt from 'bcrypt';
 import { UserRepository } from '@Users/repositories';
-import { EmailAlreadyTakenError } from '@Users/errors';
-import type { CreateUserDto } from '@Users/dto';
 import type { EnvConfig } from '@Config';
 import type { User } from '@PrismaClient';
 
-/**
- * Lógica de negocio de usuarios.
- *
- * No conoce Prisma: todo el acceso a datos pasa por UserRepository.
- */
 @Injectable()
 export class UsersService {
   private readonly saltRounds: number;
@@ -21,19 +14,6 @@ export class UsersService {
     configService: ConfigService<EnvConfig, true>,
   ) {
     this.saltRounds = configService.get('BCRYPT_SALT_ROUNDS', { infer: true });
-  }
-
-    async create({ email, password }: CreateUserDto): Promise<User> {
-    const passwordHash = await this.hashPassword(password);
-
-    try {
-      return await this.userRepository.create({ email, passwordHash });
-    } catch (error) {
-      if (error instanceof EmailAlreadyTakenError) {
-        throw new ConflictException('El email ya está registrado.');
-      }
-      throw error;
-    }
   }
 
   findByEmail(email: string): Promise<User | null> {
@@ -50,5 +30,10 @@ export class UsersService {
 
   verifyPassword(password: string, passwordHash: string): Promise<boolean> {
     return bcrypt.compare(password, passwordHash);
+  }
+
+  /** Delega el cambio atómico de contraseña al repositorio (BE-1.2). */
+  changePassword(userId: string, newPasswordHash: string): Promise<void> {
+    return this.userRepository.changePassword(userId, newPasswordHash);
   }
 }

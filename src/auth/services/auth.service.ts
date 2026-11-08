@@ -1,8 +1,8 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import bcrypt from 'bcrypt';
 import { UsersService } from '@Users/services';
 import { TokenService } from './token.service.js';
-import type { LoginDto } from '@Auth/dto';
+import type { LoginDto, ChangePasswordDto } from '@Auth/dto';
 import type { TokenPair } from '@Auth/types';
 import type { User } from '@PrismaClient';
 
@@ -53,6 +53,26 @@ export class AuthService {
     }
 
     return user;
+  }
+
+    /**
+   * Cambia la contraseña temporal. Verifica la actual, exige que la nueva sea
+   * distinta y delega el cambio atómico (hash + mustChangePassword=false +
+   * revocar sesiones) a UsersService.
+   */
+  async changePassword(user: User, dto: ChangePasswordDto): Promise<void> {
+    const matches = await this.usersService.verifyPassword(
+      dto.currentPassword,
+      user.passwordHash,
+    );
+    if (!matches) {
+      throw new BadRequestException('La contraseña actual no es correcta.');
+    }
+    if (dto.newPassword === dto.currentPassword) {
+      throw new BadRequestException('La nueva contraseña debe ser distinta de la actual.');
+    }
+    const newPasswordHash = await this.usersService.hashPassword(dto.newPassword);
+    await this.usersService.changePassword(user.id, newPasswordHash);
   }
 
   refresh(refreshToken: string): Promise<{ user: User; tokens: TokenPair }> {
