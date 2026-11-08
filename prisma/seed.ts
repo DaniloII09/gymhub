@@ -62,6 +62,28 @@ async function main() {
     });
   }
   console.log(`${MACHINES.length} máquinas en el inventario`);
+
+  /**
+   * Bloques de disponibilidad (DB-10.1 / H10): bloques de ejemplo para entrenadores.
+   */
+  const trainerUser = await prisma.user.findUnique({
+    where: { email: 'entrenador@gymhub.test' },
+  });
+
+  if (trainerUser) {
+    const availabilityBlocks = [
+      { userId: trainerUser.id, weekday: 1, startTime: '08:00', endTime: '12:00' }, // Lunes
+      { userId: trainerUser.id, weekday: 3, startTime: '14:00', endTime: '18:00' }, // Miércoles
+      { userId: trainerUser.id, weekday: 5, startTime: '09:00', endTime: '14:00' }, // Viernes
+    ];
+
+    await prisma.availabilityBlock.createMany({
+      data: availabilityBlocks,
+      skipDuplicates: true,
+    });
+
+    console.log(`${availabilityBlocks.length} bloques de disponibilidad cargados`);
+  }
 }
 
 try {
