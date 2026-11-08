@@ -1,7 +1,7 @@
 // Módulo 0 · Usuarios y autenticación. Base del boilerplate + rol.
 // Dueño del archivo: lo revisa Danilo. Solo se agrega lo imprescindible para
 // el control de acceso (el campo `role`). Los datos de perfil del miembro
-// (nombre, sexo, fecha de nacimiento, código, etc.) los agrega H01 en su rama.
+// (nombre, sexo, fecha de nacimiento, código, etc.) los agrega H01 en su rama. 
 
 enum Role {
   MEMBER
@@ -10,15 +10,28 @@ enum Role {
   ADMIN
 }
 
-model User {
-  id           String  @id @default(uuid()) @db.Uuid
-  email        String  @unique
-  passwordHash String  @map("password_hash")
-  role         Role    @default(MEMBER)
-  isActive     Boolean @default(true) @map("is_active")
+enum Sex { 
+  M 
+  F 
+}
 
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+model User {
+  id        String    @id @default(uuid()) @db.Uuid
+  fullName  String    @db.VarChar(100)
+  sex       Sex?
+  birthDate DateTime? @db.Date
+  email     String    @unique
+
+  passwordHash       String    @map("password_hash")
+  mustChangePassword Boolean   @default(false)
+  role               Role      @default(MEMBER)
+  isActive           Boolean   @default(true) @map("is_active")
+  enrolledAt         DateTime? @db.Date
+  memberCode         String?   @unique @db.VarChar(10)
+
+  createdById String?  @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   refreshTokens RefreshToken[]
 
@@ -28,6 +41,8 @@ model User {
   // Épica 5 · Pagos (H15): cobros de este miembro y pagos que registró.
   charges            Charge[]  @relation("ChargeMember")
   registeredPayments Payment[] @relation("PaymentRegisteredBy")
+  // Épica 3 · Agenda de entrenadores personales (H10): bloques de disponibilidad.
+  availabilityBlocks AvailabilityBlock[]
 
   // NOTA PARA EL EQUIPO: cuando tu modelo referencie a User (ej. Membership.member,
   // GroupClass.trainer), agregá acá la relación opuesta. Este archivo tiene
