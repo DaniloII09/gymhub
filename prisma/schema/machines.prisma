@@ -1,4 +1,52 @@
 // Épica 7 · Máquinas. Dueño: Juan Carlos (DB-20.1).
-// Agregá acá los modelos de tu módulo en tu feat branch. Si referencian a
-// User, agregá la relación opuesta en users.prisma (revisión de Danilo).
+// Inventario de máquinas y el historial de cada cambio de estado (H20, H21).
 // IDs: Int autoincrement para el dominio; los usuarios usan UUID.
+
+enum MachineArea {
+  CARDIO
+  STRENGTH
+  FREE_WEIGHTS
+  FUNCTIONAL
+}
+
+enum MachineStatus {
+  OPERATIONAL
+  UNDER_MAINTENANCE
+  OUT_OF_SERVICE
+}
+
+/// Máquina del gimnasio. No se borra: una máquina retirada queda
+/// OUT_OF_SERVICE y conserva su historial.
+model Machine {
+  id     Int           @id @default(autoincrement())
+  code   String        @unique @db.VarChar(10)
+  name   String        @db.VarChar(60)
+  area   MachineArea
+  status MachineStatus @default(OPERATIONAL)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  statusChanges MachineStatusChange[]
+
+  @@index([area, name])
+  @@map("machines")
+}
+
+/// Un registro por cada cambio de estado. Solo se inserta: el historial no se
+/// edita ni se elimina, por eso las relaciones usan onDelete: Restrict.
+model MachineStatusChange {
+  id          Int           @id @default(autoincrement())
+  machineId   Int           @map("machine_id")
+  fromStatus  MachineStatus @map("from_status")
+  toStatus    MachineStatus @map("to_status")
+  reason      String        @db.VarChar(200)
+  changedById String        @map("changed_by_id") @db.Uuid
+  changedAt   DateTime      @default(now()) @map("changed_at")
+
+  machine   Machine @relation(fields: [machineId], references: [id], onDelete: Restrict)
+  changedBy User    @relation(fields: [changedById], references: [id], onDelete: Restrict)
+
+  @@index([machineId, changedAt])
+  @@map("machine_status_changes")
+}

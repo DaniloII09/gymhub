@@ -1,7 +1,7 @@
-// Módulo 0 · Usuarios y autenticación. Base del boilerplate + rol + perfil (H01).
-// Dueño del archivo: lo revisa Danilo (CODEOWNER). Acá viven el control de acceso
-// (campo `role`) y los datos de perfil que guarda la inscripción de miembros
-// (H01/DB-1.1): fullName, sex, birthDate, enrolledAt y memberCode.
+// Módulo 0 · Usuarios y autenticación. Base del boilerplate + rol.
+// Dueño del archivo: lo revisa Danilo. Solo se agrega lo imprescindible para
+// el control de acceso (el campo `role`). Los datos de perfil del miembro
+// (nombre, sexo, fecha de nacimiento, código, etc.) los agrega H01 en su rama. 
 
 enum Role {
   MEMBER
@@ -34,6 +34,12 @@ model User {
   updatedAt   DateTime @updatedAt @map("updated_at")
 
   refreshTokens RefreshToken[]
+
+  // Épica 7 · Máquinas (H20): cambios de estado que registró este usuario.
+  machineStatusChanges MachineStatusChange[]
+
+  // Épica 3 · Agenda de entrenadores personales (H10): bloques de disponibilidad.
+  availabilityBlocks AvailabilityBlock[]
 
   // NOTA PARA EL EQUIPO: cuando tu modelo referencie a User (ej. Membership.member,
   // GroupClass.trainer), agregá acá la relación opuesta. Este archivo tiene
