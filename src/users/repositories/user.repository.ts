@@ -6,9 +6,14 @@ import { Prisma, type User } from '@PrismaClient';
 /** Código de Prisma para violación de restricción única. */
 const UNIQUE_CONSTRAINT_VIOLATION = 'P2002';
 
-export interface CreateUserData {
+export interface CreateMemberData {
+  fullName: string;
+  sex: 'M' | 'F';
+  birthDate: Date;
   email: string;
   passwordHash: string;
+  memberCode: string;
+  createdById: string;
 }
 
 /**
@@ -31,21 +36,6 @@ export class UserRepository {
    * insert. El código P2002 de Prisma se traduce a un error de dominio para
    * que la capa de servicio no tenga que conocer los códigos del ORM.
    */
-    async create({ email, passwordHash }: CreateUserData): Promise<User> {
-    try {
-      return await this.prisma.user.create({
-        data: { email: this.normalizeEmail(email), passwordHash },
-      });
-    } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === UNIQUE_CONSTRAINT_VIOLATION
-      ) {
-        throw new EmailAlreadyTakenError(email);
-      }
-      throw error;
-    }
-  }
 
   findById(id: string): Promise<User | null> {
     return this.prisma.user.findUnique({ where: { id } });
@@ -86,5 +76,51 @@ export class UserRepository {
    */
   private normalizeEmail(email: string): string {
     return email.trim().toLowerCase();
+  }
+
+  /**
+   * @throws {EmailAlreadyTakenError} si el email ya existe.
+   * El rol MEMBER y mustChangePassword los fija el servidor, no el llamador.
+   */
+  async createMember(data: CreateMemberData): Promise<User> {
+    try {
+      return await this.prisma.user.create({
+        data: {
+          email: this.normalizeEmail(data.email),
+          passwordHash: data.passwordHash,
+          fullName: data.fullName,
+          sex: data.sex,
+          birthDate: data.birthDate,
+          role: 'MEMBER',
+          memberCode: data.memberCode,
+          enrolledAt: new Date(),
+          mustChangePassword: true,
+          createdById: data.createdById,
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === UNIQUE_CONSTRAINT_VIOLATION
+      ) {
+        throw new EmailAlreadyTakenError(data.email);
+      }
+      throw error;
+    }
+  }
+
+  /** Consume la secuencia member_code_seq y arma el código GYM-000000. */
+  async nextMemberCode(): Promise<string> {
+    const rows = await this.prisma.$queryRaw<Array<{ nextval: bigint }>>`
+      SELECT nextval('member_code_seq')
+    `;
+    return `GYM-${String(rows[0].nextval).padStart(6, '0')}`;
+  }
+
+  /** Columnas que violó un P2002, para no confundir email con memberCode. */
+  private uniqueTargets(error: Prisma.PrismaClientKnownRequestError): string[] {
+    const target = error.meta?.target;
+    if (Array.isArray(target)) return target;
+    return typeof target === 'string' ? [target] : [];
   }
 }
