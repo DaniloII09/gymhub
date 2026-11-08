@@ -6,6 +6,7 @@ import {
 import { paginate, toSkipTake, type Paginated } from '@Common/pagination';
 import {
   MachineRepository,
+  type MachineAvailability,
   type MachineStatusChangeWithAuthor,
 } from '@Machines/repositories';
 import {
@@ -16,6 +17,7 @@ import {
 import type {
   ChangeMachineStatusDto,
   ListMachinesQueryDto,
+  MachineAvailabilityQueryDto,
 } from '@Machines/dto';
 import type { Machine } from '@PrismaClient';
 
@@ -26,7 +28,8 @@ export const MACHINE_STATUS_CONFLICT_MESSAGE =
   'La máquina cambió de estado mientras guardabas. Vuelve a intentarlo.';
 
 /**
- * Lógica de negocio del inventario de máquinas (H20).
+ * Lógica de negocio del inventario de máquinas (H20) y de su consulta
+ * pública (H21).
  *
  * No conoce Prisma: el acceso a datos pasa por MachineRepository, y los
  * errores de dominio se traducen acá a respuestas HTTP.
@@ -41,6 +44,16 @@ export class MachinesService {
       ...toSkipTake(query),
     });
     return paginate(machines, total, query);
+  }
+
+  /** Consulta pública: cualquier usuario con sesión ve el estado actual. */
+  availability(
+    query: MachineAvailabilityQueryDto,
+  ): Promise<MachineAvailability[]> {
+    return this.machineRepository.findAvailability({
+      area: query.area,
+      status: query.status,
+    });
   }
 
   async changeStatus(

@@ -23,6 +23,9 @@ import { MachinesService } from '@Machines/services';
 import {
   ChangeMachineStatusDto,
   ListMachinesQueryDto,
+  MachineAvailabilityDto,
+  MachineAvailabilityListDto,
+  MachineAvailabilityQueryDto,
   MachinePageDto,
   MachineResponseDto,
   MachineStatusChangeResponseDto,
@@ -32,9 +35,9 @@ import {
 import type { User } from '@PrismaClient';
 
 /**
- * Inventario y mantenimiento de máquinas (H20). Todo es solo para
- * Administrador; por eso @Roles va en cada ruta y no en la clase: la consulta
- * pública de disponibilidad (H21) vive en este mismo controlador.
+ * Inventario y mantenimiento de máquinas (H20), solo para Administrador, y la
+ * consulta pública de disponibilidad (H21), para cualquier usuario con sesión.
+ * Por eso @Roles va en cada ruta y no en la clase.
  */
 @ApiTags('machines')
 @ApiBearerAuth()
@@ -54,6 +57,26 @@ export class MachinesController {
     return {
       ...page,
       data: page.data.map((machine) => MachineResponseDto.fromEntity(machine)),
+    };
+  }
+
+  // Sin @Roles: cualquier usuario con sesión. El guard global de JWT sigue
+  // exigiendo el token, así que sin sesión responde 401.
+  @Get('availability')
+  @ApiOperation({
+    summary:
+      'Estado de las máquinas para cualquier usuario, sin datos internos (H21)',
+  })
+  @ApiOkResponse({ type: MachineAvailabilityListDto })
+  @ApiBadRequestResponse({ description: 'Área o estado no válidos.' })
+  async availability(
+    @Query() query: MachineAvailabilityQueryDto,
+  ): Promise<MachineAvailabilityListDto> {
+    const machines = await this.machinesService.availability(query);
+    return {
+      data: machines.map((machine) =>
+        MachineAvailabilityDto.fromEntity(machine),
+      ),
     };
   }
 
