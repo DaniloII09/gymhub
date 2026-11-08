@@ -44,6 +44,9 @@ model User {
   // Épica 3 · Agenda de entrenadores personales (H10): bloques de disponibilidad.
   availabilityBlocks AvailabilityBlock[]
 
+  // Épica 2 · Clases grupales (H06): clases grupales asignadas a este entrenador.
+  trainedClasses GymClass[]
+
   // NOTA PARA EL EQUIPO: cuando tu modelo referencie a User (ej. Membership.member,
   // GroupClass.trainer), agregá acá la relación opuesta. Este archivo tiene
   // CODEOWNER = Danilo, así que ese cambio pasa por su revisión.

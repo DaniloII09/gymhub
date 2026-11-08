@@ -1,4 +1,31 @@
 // Épica 2 · Clases grupales. Dueño: Luis (DB-6.1, DB-7.1).
-// Agregá acá los modelos de tu módulo en tu feat branch. Si referencian a
-// User, agregá la relación opuesta en users.prisma (revisión de Danilo).
+// Programación y edición de clases grupales (H06) y calendario/reservas (H07).
 // IDs: Int autoincrement para el dominio; los usuarios usan UUID.
+
+enum ClassStatus {
+  SCHEDULED
+  CANCELLED
+}
+
+/// Clase grupal programada por el administrador (H06).
+/// El cupo debe estar entre 1 y 50, y endsAt debe ser mayor que startsAt
+/// (restricciones CHECK en la migración DB-6.1).
+model GymClass {
+  id        Int         @id @default(autoincrement())
+  name      String      @db.VarChar(60)
+  trainerId String      @map("trainer_id") @db.Uuid
+  startsAt  DateTime    @map("starts_at")
+  endsAt    DateTime    @map("ends_at")
+  capacity  Int
+  status    ClassStatus @default(SCHEDULED)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  trainer User @relation(fields: [trainerId], references: [id], onDelete: Restrict)
+
+  @@index([trainerId, startsAt])
+  @@index([startsAt])
+  @@map("gym_classes")
+}
+
