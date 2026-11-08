@@ -32,4 +32,8 @@ export class UsersService {
     return bcrypt.compare(password, passwordHash);
   }
 
+  /** Delega el cambio atómico de contraseña al repositorio (BE-1.2). */
+  changePassword(userId: string, newPasswordHash: string): Promise<void> {
+    return this.userRepository.changePassword(userId, newPasswordHash);
+  }
 }

@@ -116,11 +116,21 @@ export class UserRepository {
     `;
     return `GYM-${String(rows[0].nextval).padStart(6, '0')}`;
   }
-
-  /** Columnas que violó un P2002, para no confundir email con memberCode. */
-  private uniqueTargets(error: Prisma.PrismaClientKnownRequestError): string[] {
-    const target = error.meta?.target;
-    if (Array.isArray(target)) return target;
-    return typeof target === 'string' ? [target] : [];
+  /**
+   * Cambia la contraseña y apaga mustChangePassword, revocando todas las
+   * sesiones del usuario, en una sola transacción. Toca refresh_tokens a
+   * propósito acá para que el cambio sea atómico (BE-1.2).
+   */
+  async changePassword(userId: string, passwordHash: string): Promise<void> {
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { passwordHash, mustChangePassword: false },
+      }),
+      this.prisma.refreshToken.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
   }
 }
