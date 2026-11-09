@@ -72,6 +72,56 @@ const PAID_CHARGE = {
 /** Clave fija del pago de prueba: hace idempotente esta parte del seed. */
 const PAID_CHARGE_KEY = '00000000-0000-4000-8000-000000000015';
 
+/**
+ * Clases grupales de prueba (DB-6.1 / H06): 6 clases programadas en días futuros
+ * asignadas a entrenador@gymhub.test. Se identifican por nombre y entrenador
+ * para no duplicarlas ni borrar datos existentes al re-ejecutar el seed.
+ */
+const GYM_CLASSES = [
+  {
+    name: 'Spinning Matutino',
+    daysAhead: 1,
+    startHour: 7,
+    durationMinutes: 60,
+    capacity: 20,
+  },
+  {
+    name: 'Yoga Flow',
+    daysAhead: 1,
+    startHour: 9,
+    durationMinutes: 60,
+    capacity: 15,
+  },
+  {
+    name: 'CrossFit Funcional',
+    daysAhead: 2,
+    startHour: 18,
+    durationMinutes: 60,
+    capacity: 25,
+  },
+  {
+    name: 'Pilates Core',
+    daysAhead: 3,
+    startHour: 8,
+    durationMinutes: 45,
+    capacity: 12,
+  },
+  {
+    name: 'Boxeo Fitness',
+    daysAhead: 4,
+    startHour: 17,
+    durationMinutes: 60,
+    capacity: 20,
+  },
+  {
+    name: 'HIIT Nocturno',
+    daysAhead: 5,
+    startHour: 19,
+    durationMinutes: 50,
+    capacity: 30,
+  },
+] as const;
+
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
@@ -122,6 +172,7 @@ async function main() {
   console.log(`${MACHINES.length} máquinas en el inventario`);
 
   await seedCharges();
+  await seedGymClasses();
 }
 
 async function seedCharges() {
@@ -208,6 +259,46 @@ async function seedCharges() {
 
     console.log(`${availabilityBlocks.length} bloques de disponibilidad cargados`);
   }
+}
+
+async function seedGymClasses() {
+  const trainer = await prisma.user.findUniqueOrThrow({
+    where: { email: 'entrenador@gymhub.test' },
+  });
+  const now = new Date();
+
+  for (const item of GYM_CLASSES) {
+    const exists = await prisma.gymClass.count({
+      where: { trainerId: trainer.id, name: item.name },
+    });
+    if (!exists) {
+      const startsAt = new Date(
+        Date.UTC(
+          now.getUTCFullYear(),
+          now.getUTCMonth(),
+          now.getUTCDate() + item.daysAhead,
+          item.startHour,
+          0,
+          0,
+          0,
+        ),
+      );
+      const endsAt = new Date(
+        startsAt.getTime() + item.durationMinutes * 60_000,
+      );
+      await prisma.gymClass.create({
+        data: {
+          name: item.name,
+          trainerId: trainer.id,
+          startsAt,
+          endsAt,
+          capacity: item.capacity,
+          status: 'SCHEDULED',
+        },
+      });
+    }
+  }
+  console.log(`${GYM_CLASSES.length} clases grupales de prueba en el horario`);
 }
 
 try {
