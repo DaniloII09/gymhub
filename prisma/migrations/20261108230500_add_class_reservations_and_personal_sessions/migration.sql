@@ -63,3 +63,4 @@ ALTER TABLE "personal_sessions" ADD CONSTRAINT "personal_sessions_availability_b
 
 -- Agregado a mano (DB-11.1): la hora de fin de la sesión personal debe ser posterior a la de inicio.
 ALTER TABLE "personal_sessions" ADD CONSTRAINT "personal_sessions_ends_after_starts" CHECK ("ends_at" > "starts_at");
+

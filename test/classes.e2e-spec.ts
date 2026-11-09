@@ -16,6 +16,7 @@ import { ClassRepository } from '@Classes/repositories';
  */
 const PASSWORD = 'Demo1234!';
 const NAME_PREFIX = '[e2e H06]';
+const RESERVATION_EMAIL_PREFIX = 'e2e.h06.res.';
 
 function futureWindow(
   daysAhead: number,
@@ -52,6 +53,7 @@ describe('Clases grupales · H06 (e2e)', () => {
   let memberToken: string;
   let trainerId: string;
   let memberId: string;
+  const createdSessionIds: number[] = [];
 
   const login = async (email: string): Promise<string> => {
     const res = await request(app.getHttpServer())
@@ -62,8 +64,31 @@ describe('Clases grupales · H06 (e2e)', () => {
   };
 
   async function cleanUp(): Promise<void> {
+    await prisma.classReservation.deleteMany({
+      where: {
+        gymClass: {
+          name: { startsWith: NAME_PREFIX },
+        },
+      },
+    });
+    if (createdSessionIds.length > 0) {
+      await prisma.personalSession.deleteMany({
+        where: { id: { in: createdSessionIds } },
+      });
+      createdSessionIds.length = 0;
+    }
+    await prisma.personalSession.deleteMany({
+      where: {
+        member: {
+          email: { startsWith: RESERVATION_EMAIL_PREFIX },
+        },
+      },
+    });
     await prisma.gymClass.deleteMany({
       where: { name: { startsWith: NAME_PREFIX } },
+    });
+    await prisma.user.deleteMany({
+      where: { email: { startsWith: RESERVATION_EMAIL_PREFIX } },
     });
   }
 
@@ -130,7 +155,7 @@ describe('Clases grupales · H06 (e2e)', () => {
     expect(seededCount).toBeGreaterThanOrEqual(6);
   });
 
-  it('Criterio 1 y 6: ADMIN programa una clase y queda en estado SCHEDULED (201)', async () => {
+  it('Criterio 1 y 6: ADMIN programa una clase, queda en estado SCHEDULED (201) y aparece en el calendario semanal (GET /api/v1/classes)', async () => {
     const window = futureWindow(20, 10, 0, 60);
     const res = await createClass(adminToken, {
       name: `${NAME_PREFIX} Funcional`,
@@ -150,6 +175,31 @@ describe('Clases grupales · H06 (e2e)', () => {
         email: 'entrenador@gymhub.test',
       },
     });
+
+    const from = new Date(
+      new Date(window.startsAt).getTime() - 3_600_000,
+    ).toISOString();
+    const to = new Date(
+      new Date(window.endsAt).getTime() + 3_600_000,
+    ).toISOString();
+
+    const calendarRes = await request(app.getHttpServer())
+      .get('/api/v1/classes')
+      .set('Authorization', `Bearer ${memberToken}`)
+      .query({ from, to })
+      .expect(200);
+
+    expect(calendarRes.body).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: res.body.id,
+          name: `${NAME_PREFIX} Funcional`,
+          status: 'SCHEDULED',
+          capacity: 25,
+          confirmedReservations: 0,
+        }),
+      ]),
+    );
   });
 
   it('Criterio 6: rechaza a usuarios con rol RECEPCION, TRAINER o MEMBER (403) y sin sesión (401)', async () => {
@@ -293,9 +343,45 @@ describe('Clases grupales · H06 (e2e)', () => {
     }).expect(201);
   });
 
-  it('Criterio 2 y 3 (parcial, simulando conteo hasta integrar DB-7.1 / H07): sin H07 countConfirmedReservations devuelve 0; al simular 12 reservas con spyOn, bajar de 20 a 10 devuelve 409 y conserva 20', async () => {
+  it('Criterio 5 (sesiones personales reales en BD): rechaza programar o editar una clase que se cruza con una sesión personal del entrenador (409) y permite horarios contiguos (201)', async () => {
+    const sessionWindow = futureWindow(28, 18, 0, 60); // 18:00 a 19:00
+    const personalSession = await prisma.personalSession.create({
+      data: {
+        trainerId,
+        memberId,
+        startsAt: new Date(sessionWindow.startsAt),
+        endsAt: new Date(sessionWindow.endsAt),
+        status: 'SCHEDULED',
+      },
+    });
+    createdSessionIds.push(personalSession.id);
+
+    // Intento de clase grupal de 18:30 a 19:30 -> se cruza con la sesión personal (18:00 a 19:00)
+    const overlapWithSession = futureWindow(28, 18, 30, 60);
+    const conflictRes = await createClass(adminToken, {
+      name: `${NAME_PREFIX} Cruce Sesion Personal`,
+      trainerId,
+      ...overlapWithSession,
+      capacity: 15,
+    }).expect(409);
+
+    expect(conflictRes.body.message).toContain(
+      `la sesión personal #${personalSession.id} (18:00 a 19:00)`,
+    );
+
+    // Clase contigua que inicia exactamente a las 19:00 (cuando termina la sesión personal) -> 201 Created
+    const contiguousAfterSession = futureWindow(28, 19, 0, 60);
+    await createClass(adminToken, {
+      name: `${NAME_PREFIX} Contigua Post Sesion 19:00`,
+      trainerId,
+      ...contiguousAfterSession,
+      capacity: 15,
+    }).expect(201);
+  });
+
+  it('Criterios 2 y 3 (reservas confirmadas reales en BD): con 12 reservas CONFIRMED reales en PostgreSQL, bajar el cupo de 20 a 10 devuelve 409 con el mensaje exacto y conserva 20; permite bajar a 12 o subir a 30', async () => {
     const created = await createClass(adminToken, {
-      name: `${NAME_PREFIX} Control de Cupo`,
+      name: `${NAME_PREFIX} Control de Cupo Real`,
       trainerId,
       ...futureWindow(26, 9, 0, 60),
       capacity: 20,
@@ -303,43 +389,57 @@ describe('Clases grupales · H06 (e2e)', () => {
 
     const classId = created.body.id as number;
 
-    // Sin spyOn, el repositorio devuelve 0 porque aún no existe el modelo de reservas de H07.
+    // Creamos 13 miembros temporales en BD: 12 con reserva CONFIRMED y 1 con reserva CANCELLED.
+    const testMembers = await Promise.all(
+      Array.from({ length: 13 }, (_, index) =>
+        prisma.user.create({
+          data: {
+            email: `${RESERVATION_EMAIL_PREFIX}${index + 1}@gymhub.test`,
+            fullName: `Miembro Reserva ${index + 1}`,
+            passwordHash: 'not-used-in-login',
+            role: 'MEMBER',
+          },
+        }),
+      ),
+    );
+
+    await prisma.classReservation.createMany({
+      data: testMembers.map((m, idx) => ({
+        classId,
+        memberId: m.id,
+        status: idx < 12 ? 'CONFIRMED' : 'CANCELLED',
+      })),
+    });
+
+    // Verificamos que el repositorio cuenta exactamente 12 reservas CONFIRMED reales en PostgreSQL (sin mocks).
     await expect(
       classRepository.countConfirmedReservations(classId),
-    ).resolves.toBe(0);
+    ).resolves.toBe(12);
 
-    // Se simula el retorno de 12 reservas para verificar únicamente la regla de rechazo en el servicio/repositorio.
-    const spy = vi
-      .spyOn(classRepository, 'countConfirmedReservations')
-      .mockResolvedValue(12);
+    const rejected = await updateClass(adminToken, classId, {
+      capacity: 10,
+    }).expect(409);
 
-    try {
-      const rejected = await updateClass(adminToken, classId, {
-        capacity: 10,
-      }).expect(409);
+    expect(rejected.body.message).toBe(
+      'El cupo no puede ser menor a las 12 reservas confirmadas.',
+    );
 
-      expect(rejected.body.message).toBe(
-        'El cupo no puede ser menor a las 12 reservas confirmadas.',
-      );
+    const persisted = await prisma.gymClass.findUniqueOrThrow({
+      where: { id: classId },
+    });
+    expect(persisted.capacity).toBe(20);
 
-      const persisted = await prisma.gymClass.findUniqueOrThrow({
-        where: { id: classId },
-      });
-      expect(persisted.capacity).toBe(20);
+    const equalToConfirmed = await updateClass(adminToken, classId, {
+      capacity: 12,
+    }).expect(200);
+    expect(equalToConfirmed.body.capacity).toBe(12);
+    expect(equalToConfirmed.body.confirmedReservations).toBe(12);
 
-      const equalToConfirmed = await updateClass(adminToken, classId, {
-        capacity: 12,
-      }).expect(200);
-      expect(equalToConfirmed.body.capacity).toBe(12);
-      expect(equalToConfirmed.body.confirmedReservations).toBe(12);
-
-      const raised = await updateClass(adminToken, classId, {
-        capacity: 30,
-      }).expect(200);
-      expect(raised.body.capacity).toBe(30);
-    } finally {
-      spy.mockRestore();
-    }
+    const raised = await updateClass(adminToken, classId, {
+      capacity: 30,
+    }).expect(200);
+    expect(raised.body.capacity).toBe(30);
+    expect(raised.body.confirmedReservations).toBe(12);
   });
 
   it('DB-6.1: las restricciones CHECK de PostgreSQL rechazan cupos 0 y 51 y endsAt igual a startsAt', async () => {

@@ -19,3 +19,4 @@ DROP TYPE "ReservationStatus";
 
 -- Olvida la migración en el historial de Prisma.
 DELETE FROM "_prisma_migrations" WHERE "migration_name" = '20261108230500_add_class_reservations_and_personal_sessions';
+

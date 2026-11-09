@@ -27,3 +27,4 @@ export class ListClassesQueryDto {
   @IsDate({ message: 'La fecha final del filtro (to) no es válida.' })
   to?: Date;
 }
+
