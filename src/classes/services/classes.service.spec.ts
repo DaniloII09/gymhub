@@ -82,6 +82,7 @@ const sampleClass = (
 describe('ClassesService', () => {
   let repository: {
     findById: ReturnType<typeof vi.fn>;
+    listByRange: ReturnType<typeof vi.fn>;
     create: ReturnType<typeof vi.fn>;
     update: ReturnType<typeof vi.fn>;
     countConfirmedReservations: ReturnType<typeof vi.fn>;
@@ -91,11 +92,32 @@ describe('ClassesService', () => {
   beforeEach(() => {
     repository = {
       findById: vi.fn(),
+      listByRange: vi.fn(),
       create: vi.fn(),
       update: vi.fn(),
       countConfirmedReservations: vi.fn(),
     };
     service = new ClassesService(repository as unknown as ClassRepository);
+  });
+
+  describe('list', () => {
+    it('lista las clases dentro del rango solicitado para el calendario', async () => {
+      const from = new Date('2026-12-01T00:00:00.000Z');
+      const to = new Date('2026-12-08T00:00:00.000Z');
+      const expected = [sampleClass()];
+      repository.listByRange.mockResolvedValue(expected);
+
+      await expect(service.list({ from, to })).resolves.toEqual(expected);
+      expect(repository.listByRange).toHaveBeenCalledWith(from, to);
+    });
+
+    it('rechaza un rango donde to es menor o igual a from', async () => {
+      const date = new Date('2026-12-01T00:00:00.000Z');
+      await expect(service.list({ from: date, to: date })).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(repository.listByRange).not.toHaveBeenCalled();
+    });
   });
 
   const validCreateDto = (
@@ -199,6 +221,29 @@ describe('ClassesService', () => {
       expect((error as ConflictException).message).toContain('18:00 a 18:50');
     });
 
+    it('devuelve 409 cuando la clase se cruza con una sesión personal del mismo entrenador', async () => {
+      const existingSession = futureSchedule(18, 0, 60);
+      const overlappingAttempt = futureSchedule(18, 30, 60);
+
+      repository.create.mockRejectedValue(
+        new TrainerScheduleConflictError({
+          kind: 'PERSONAL_SESSION',
+          id: 42,
+          startsAt: existingSession.startsAt,
+          endsAt: existingSession.endsAt,
+        }),
+      );
+
+      const error = await service
+        .create(validCreateDto(overlappingAttempt))
+        .catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(ConflictException);
+      expect((error as ConflictException).message).toContain(
+        'la sesión personal #42 (18:00 a 19:00)',
+      );
+    });
+
     it('permite una clase que inicia a las 18:00 cuando otra termina exactamente a las 18:00', async () => {
       const contiguous = futureSchedule(18, 0, 60);
       const created = sampleClass({
@@ -296,12 +341,20 @@ describe('ClassesService', () => {
 });
 
 describe('ClassRepository · reglas transaccionales', () => {
-  it('devuelve 0 en countConfirmedReservations mientras falte el modelo de reservas de H07 (DB-7.1)', async () => {
-    const repo = new ClassRepository({} as unknown as PrismaService);
-    await expect(repo.countConfirmedReservations(1)).resolves.toBe(0);
+  it('cuenta únicamente las reservas en estado CONFIRMED en classReservation', async () => {
+    const count = vi.fn().mockResolvedValue(12);
+    const prisma = {
+      classReservation: { count },
+    };
+    const repo = new ClassRepository(prisma as unknown as PrismaService);
+
+    await expect(repo.countConfirmedReservations(7)).resolves.toBe(12);
+    expect(count).toHaveBeenCalledWith({
+      where: { classId: 7, status: 'CONFIRMED' },
+    });
   });
 
-  it('al simular 12 reservas confirmadas, rechaza bajar el cupo de 20 a 10 sin modificar la clase', async () => {
+  it('con 12 reservas confirmadas en la transacción, rechaza bajar el cupo de 20 a 10 sin modificar la clase', async () => {
     const existing = sampleClass({ capacity: 20 });
     const tx = {
       $queryRaw: vi.fn().mockResolvedValue([{ id: existing.id }]),
@@ -309,6 +362,12 @@ describe('ClassRepository · reglas transaccionales', () => {
         findUniqueOrThrow: vi.fn().mockResolvedValue(existing),
         findFirst: vi.fn(),
         update: vi.fn(),
+      },
+      classReservation: {
+        count: vi.fn().mockResolvedValue(12),
+      },
+      personalSession: {
+        findFirst: vi.fn(),
       },
       user: {
         findUnique: vi.fn(),
@@ -319,12 +378,59 @@ describe('ClassRepository · reglas transaccionales', () => {
     };
 
     const repo = new ClassRepository(prisma as unknown as PrismaService);
-    vi.spyOn(repo, 'countConfirmedReservations').mockResolvedValue(12);
 
     await expect(repo.update(existing.id, { capacity: 10 })).rejects.toThrow(
       'El cupo no puede ser menor a las 12 reservas confirmadas.',
     );
+    expect(tx.classReservation.count).toHaveBeenCalledWith({
+      where: { classId: existing.id, status: 'CONFIRMED' },
+    });
     expect(tx.gymClass.update).not.toHaveBeenCalled();
+  });
+
+  it('rechaza crear una clase cuando el entrenador tiene una sesión personal SCHEDULED que se cruza', async () => {
+    const sessionWindow = futureSchedule(18, 0, 60);
+    const classWindow = futureSchedule(18, 30, 60);
+    const tx = {
+      user: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: TRAINER_ID,
+          role: 'TRAINER',
+          isActive: true,
+        }),
+      },
+      gymClass: {
+        findFirst: vi.fn().mockResolvedValue(null),
+        create: vi.fn(),
+      },
+      personalSession: {
+        findFirst: vi.fn().mockResolvedValue({
+          id: 99,
+          trainerId: TRAINER_ID,
+          startsAt: sessionWindow.startsAt,
+          endsAt: sessionWindow.endsAt,
+          status: 'SCHEDULED',
+        }),
+      },
+    };
+    const prisma = {
+      $transaction: vi.fn((fn: (client: typeof tx) => unknown) => fn(tx)),
+    };
+
+    const repo = new ClassRepository(prisma as unknown as PrismaService);
+
+    await expect(
+      repo.create({
+        name: 'Boxeo 18:30',
+        trainerId: TRAINER_ID,
+        startsAt: classWindow.startsAt,
+        endsAt: classWindow.endsAt,
+        capacity: 15,
+      }),
+    ).rejects.toThrow(
+      'El entrenador ya tiene asignada la sesión personal #99 (18:00 a 19:00) que se cruza con ese horario.',
+    );
+    expect(tx.gymClass.create).not.toHaveBeenCalled();
   });
 });
 

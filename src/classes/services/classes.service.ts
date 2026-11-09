@@ -18,6 +18,7 @@ import {
   MISSING_CLASS_NAME_MESSAGE,
   PAST_STARTS_AT_MESSAGE,
   type CreateClassDto,
+  type ListClassesQueryDto,
   type UpdateClassDto,
 } from '@Classes/dto';
 import {
@@ -50,6 +51,35 @@ export const INVALID_TRAINER_ROLE_MESSAGE =
 @Injectable()
 export class ClassesService {
   constructor(private readonly classRepository: ClassRepository) {}
+
+  async list(query?: ListClassesQueryDto): Promise<GymClassWithDetails[]> {
+    const now = new Date();
+    const utcDay = now.getUTCDay();
+    const diffToMonday = utcDay === 0 ? -6 : 1 - utcDay;
+    const defaultFrom = new Date(
+      Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate() + diffToMonday,
+        0,
+        0,
+        0,
+        0,
+      ),
+    );
+
+    const from = query?.from ?? defaultFrom;
+    const to =
+      query?.to ?? new Date(from.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+    if (to.getTime() <= from.getTime()) {
+      throw new BadRequestException(
+        'La fecha final del filtro (to) debe ser posterior a la fecha inicial (from).',
+      );
+    }
+
+    return this.classRepository.listByRange(from, to);
+  }
 
   async create(dto: CreateClassDto): Promise<GymClassWithDetails> {
     const name = this.validateName(dto.name);

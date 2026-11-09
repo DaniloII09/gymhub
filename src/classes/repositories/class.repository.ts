@@ -57,13 +57,44 @@ export class ClassRepository {
   }
 
   /**
+   * Lista las clases dentro del rango `[from, to]` ordenadas por hora de inicio,
+   * incluyendo datos del entrenador y el conteo real de reservas confirmadas.
+   */
+  async listByRange(from: Date, to: Date): Promise<GymClassWithDetails[]> {
+    const classes = await this.prisma.gymClass.findMany({
+      where: {
+        startsAt: {
+          gte: from,
+          lte: to,
+        },
+      },
+      include: {
+        ...WITH_TRAINER,
+        _count: {
+          select: {
+            reservations: {
+              where: { status: 'CONFIRMED' },
+            },
+          },
+        },
+      },
+      orderBy: { startsAt: 'asc' },
+    });
+
+    return classes.map(({ _count, ...item }) => ({
+      ...item,
+      confirmedReservations: _count.reservations,
+    }));
+  }
+
+  /**
    * Crea una clase grupal en estado `SCHEDULED` verificando dentro de la misma
    * transacción que el usuario asignado exista, tenga rol `TRAINER` y no tenga
-   * otra clase programada que se cruce en el horario `[startsAt, endsAt)`.
+   * otra clase programada ni sesión personal que se cruce en el horario `[startsAt, endsAt)`.
    *
    * @throws {TrainerNotFoundError} si el usuario no existe.
    * @throws {InvalidTrainerRoleError} si el usuario no tiene rol `TRAINER` o está inactivo.
-   * @throws {TrainerScheduleConflictError} si el entrenador ya tiene una clase en ese horario.
+   * @throws {TrainerScheduleConflictError} si el entrenador ya tiene una clase o sesión personal en ese horario.
    */
   async create(data: CreateGymClassData): Promise<GymClassWithDetails> {
     return this.prisma.$transaction(async (tx) => {
@@ -102,7 +133,7 @@ export class ClassRepository {
    * @throws {CapacityBelowConfirmedReservationsError} si el nuevo cupo es menor a las reservas confirmadas.
    * @throws {TrainerNotFoundError} si el nuevo entrenador no existe.
    * @throws {InvalidTrainerRoleError} si el usuario elegido no tiene rol `TRAINER`.
-   * @throws {TrainerScheduleConflictError} si el horario se cruza con otra clase del entrenador.
+   * @throws {TrainerScheduleConflictError} si el horario se cruza con otra clase o sesión personal del entrenador.
    */
   async update(
     classId: number,
@@ -168,22 +199,20 @@ export class ClassRepository {
   }
 
   /**
-   * Cuenta las reservas confirmadas de la clase.
-   *
-   * LÍMITE ACTUAL (pendiente de DB-7.1 / H07): el modelo de reservas de clase
-   * aún no existe en `prisma/schema/classes.prisma`, por lo que este método
-   * devuelve `0` de forma provisional y en la base real todavía no impide bajar
-   * el cupo frente a reservas reales.
-   *
-   * Qué funcionará al integrar H07 (DB-7.1): se reemplazará el retorno `0` por
-   * `tx.classReservation.count({ where: { classId, status: 'CONFIRMED' } })`
-   * dentro de la misma transacción con bloqueo `FOR UPDATE`.
+   * Cuenta las reservas confirmadas (`status = 'CONFIRMED'`) de la clase en
+   * la tabla `class_reservations` (DB-7.1).
    */
   countConfirmedReservations(
-    _classId: number,
-    _tx?: Prisma.TransactionClient,
+    classId: number,
+    tx?: Prisma.TransactionClient,
   ): Promise<number> {
-    return Promise.resolve(0);
+    const client = tx ?? this.prisma;
+    return client.classReservation.count({
+      where: {
+        classId,
+        status: 'CONFIRMED',
+      },
+    });
   }
 
   private async assertValidTrainer(
@@ -205,22 +234,12 @@ export class ClassRepository {
   }
 
   /**
-   * Verifica que el entrenador no tenga otra clase grupal `SCHEDULED` que se
-   * cruce con `[startsAt, endsAt)`.
+   * Verifica que el entrenador no tenga otra clase grupal `SCHEDULED` ni una
+   * sesión personal `SCHEDULED` que se cruce con `[startsAt, endsAt)`.
    *
    * Dos intervalos `[A_start, A_end)` y `[B_start, B_end)` se cruzan sí y solo
    * si `B_start < A_end` y `B_end > A_start`. Si una clase termina exactamente
    * cuando empieza la otra (`B_end == A_start` o `B_start == A_end`), NO hay cruce.
-   *
-   * LÍMITE ACTUAL (pendiente de DB-11.1 / H11): este método solo comprueba
-   * cruces contra otras clases grupales (`gym_classes`). La detección de cruces
-   * contra sesiones personales del entrenador NO está activa todavía porque el
-   * modelo de sesiones personales aún no existe en `prisma/schema/trainers.prisma`.
-   *
-   * Qué funcionará al integrar H11 (DB-11.1): se agregará en este método la
-   * consulta `tx.personalSession.findFirst` con la misma condición de solapamiento
-   * (`startsAt < endsAt && endsAt > startsAt`) para lanzar
-   * `TrainerScheduleConflictError({ kind: 'PERSONAL_SESSION', ... })`.
    */
   private async assertNoTrainerOverlap(
     tx: Prisma.TransactionClient,
@@ -251,6 +270,25 @@ export class ClassRepository {
         name: conflictingClass.name,
         startsAt: conflictingClass.startsAt,
         endsAt: conflictingClass.endsAt,
+      });
+    }
+
+    const conflictingSession = await tx.personalSession.findFirst({
+      where: {
+        trainerId: params.trainerId,
+        status: 'SCHEDULED',
+        startsAt: { lt: params.endsAt },
+        endsAt: { gt: params.startsAt },
+      },
+      orderBy: { startsAt: 'asc' },
+    });
+
+    if (conflictingSession) {
+      throw new TrainerScheduleConflictError({
+        kind: 'PERSONAL_SESSION',
+        id: conflictingSession.id,
+        startsAt: conflictingSession.startsAt,
+        endsAt: conflictingSession.endsAt,
       });
     }
   }
