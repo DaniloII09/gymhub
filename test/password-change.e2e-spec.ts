@@ -18,7 +18,7 @@ describe('Password change (e2e)', () => {
     await app.init();
 
     const login = await request(app.getHttpServer())
-      .post('/api/v1/auth/login').send({ email: 'recepcion@gymhub.test', password: 'Demo1234!' });
+      .post('/api/v1/auth/login').send({ email: 'admin@gymhub.test', password: 'Demo1234!' });
 
     const email = `pending.${Date.now()}@example.com`;
     const created = await request(app.getHttpServer())

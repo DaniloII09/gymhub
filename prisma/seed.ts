@@ -13,12 +13,17 @@ import { PrismaClient } from '../src/generated/prisma/client.js';
  * ejemplo, precios) los agrega cada dueño de módulo en su rama, no este seed.
  */
 const DEMO_PASSWORD = 'Demo1234!';
+const ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD ?? DEMO_PASSWORD;
+const STAFF_PASSWORD = process.env.SEED_STAFF_PASSWORD ?? DEMO_PASSWORD;
 
-// Una cuenta por rol de personal para probar los guards. Sin perfil de miembro.
+// Cuentas iniciales del personal (DB-2.2): contraseña desde el entorno; recepción
+// y entrenadores con cambio obligatorio. Emails en gymhub.test para no romper las
+// partes del seed de otros módulos que los buscan por correo.
 const STAFF = [
-  { email: 'admin@gymhub.test', role: 'ADMIN', fullName: 'Admin Demo' },
-  { email: 'recepcion@gymhub.test', role: 'RECEPTION', fullName: 'Recepcion Demo' },
-  { email: 'entrenador@gymhub.test', role: 'TRAINER', fullName: 'Entrenador Demo' },
+  { email: 'admin@gymhub.test', role: 'ADMIN', fullName: 'Admin Demo', password: ADMIN_PASSWORD },
+  { email: 'recepcion@gymhub.test', role: 'RECEPTION', fullName: 'Recepcion Demo', password: STAFF_PASSWORD },
+  { email: 'entrenador@gymhub.test', role: 'TRAINER', fullName: 'Entrenador Demo', password: STAFF_PASSWORD },
+  { email: 'entrenador2@gymhub.test', role: 'TRAINER', fullName: 'Entrenador Dos', password: STAFF_PASSWORD },
 ] as const;
 
 // Miembros de prueba (DB-1.1). Los códigos van hardcodeados acá; después se
@@ -82,9 +87,14 @@ async function main() {
     await prisma.user.upsert({
       where: { email: s.email },
       update: {},
-      create: { email: s.email, role: s.role, fullName: s.fullName, passwordHash },
+      create: {
+        email: s.email,
+        role: s.role,
+        fullName: s.fullName,
+        passwordHash: await bcrypt.hash(s.password, 12),
+      },
     });
-    console.log(`${s.role.padEnd(10)} ${s.email} / ${DEMO_PASSWORD}`);
+    console.log(`${s.role.padEnd(10)} ${s.email}`);
   }
 
   for (const m of MEMBERS) {

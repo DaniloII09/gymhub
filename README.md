@@ -241,11 +241,18 @@ npm run db:reset
 
 ### Seed
 
-[prisma/seed.ts](prisma/seed.ts) crea un usuario de prueba mediante `upsert`, así que se puede correr las veces que haga falta:
+`prisma/seed.ts` usa `upsert`, así que se puede correr varias veces. Crea las
+cuentas iniciales del personal (desde variables de entorno) y 3 miembros de prueba:
 
-| Email | Contraseña |
-|---|---|
-| `demo@example.com` | `Demo1234!` |
+| Cuenta                | Rol        | Contraseña              | Cambio obligatorio |
+|-----------------------|------------|-------------------------|--------------------|
+| admin@gym.local       | ADMIN      | SEED_ADMIN_PASSWORD     | no                 |
+| recepcion@gym.local   | RECEPTION  | SEED_STAFF_PASSWORD     | sí                 |
+| entrenador1@gym.local | TRAINER    | SEED_STAFF_PASSWORD     | sí                 |
+| entrenador2@gym.local | TRAINER    | SEED_STAFF_PASSWORD     | sí                 |
+| GYM-000001..3 (test)  | MEMBER     | Demo1234!               | no                 |
+
+Las contraseñas del personal salen de `.env` y nunca se guardan en el repo.
 
 ---
 

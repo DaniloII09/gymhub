@@ -18,7 +18,7 @@ describe('Members (e2e)', () => {
 
     const res = await request(app.getHttpServer())
       .post('/api/v1/auth/login')
-      .send({ email: 'recepcion@gymhub.test', password: 'Demo1234!' });
+      .send({ email: 'admin@gymhub.test', password: 'Demo1234!' });
     receptionToken = res.body.accessToken;
   });
 
