@@ -2,3 +2,31 @@
 // Agregá acá los modelos de tu módulo en tu feat branch. Si referencian a
 // User, agregá la relación opuesta en users.prisma (revisión de Danilo).
 // IDs: Int autoincrement para el dominio; los usuarios usan UUID.
+
+enum PersonalSessionStatus {
+  SCHEDULED
+  CANCELLED
+  COMPLETED
+}
+
+/// Sesión personal de entrenamiento agendada con un entrenador (DB-11.1 / H06-H11).
+/// endsAt debe ser mayor que startsAt (restricción CHECK en la migración).
+model PersonalSession {
+  id                  Int                   @id @default(autoincrement())
+  trainerId           String                @map("trainer_id") @db.Uuid
+  memberId            String                @map("member_id") @db.Uuid
+  availabilityBlockId String?               @map("availability_block_id") @db.Uuid
+  startsAt            DateTime              @map("starts_at")
+  endsAt              DateTime              @map("ends_at")
+  status              PersonalSessionStatus @default(SCHEDULED)
+  createdAt           DateTime              @default(now()) @map("created_at")
+  updatedAt           DateTime              @updatedAt @map("updated_at")
+
+  trainer           User               @relation("TrainerPersonalSessions", fields: [trainerId], references: [id], onDelete: Restrict)
+  member            User               @relation("MemberPersonalSessions", fields: [memberId], references: [id], onDelete: Restrict)
+  availabilityBlock AvailabilityBlock? @relation(fields: [availabilityBlockId], references: [id], onDelete: SetNull)
+
+  @@index([trainerId, startsAt])
+  @@index([memberId, startsAt])
+  @@map("personal_sessions")
+}
