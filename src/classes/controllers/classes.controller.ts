@@ -1,11 +1,13 @@
 import {
   Body,
   Controller,
+  Get,
   Param,
   ParseIntPipe,
   Patch,
   Post,
   Put,
+  Query,
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
@@ -23,13 +25,14 @@ import { Roles } from '@Auth/decorators';
 import {
   ClassResponseDto,
   CreateClassDto,
+  ListClassesQueryDto,
   UpdateClassDto,
 } from '@Classes/dto';
 import { ClassesService } from '@Classes/services';
 
 /**
- * Programación y edición de clases grupales (H06 / BE-6.1), restringida al rol
- * ADMIN mediante el sistema de roles global (`RolesGuard` + `@Roles('ADMIN')`).
+ * Programación, edición y consulta del calendario de clases grupales (H06 / H07).
+ * La creación y edición están restringidas a ADMIN mediante `RolesGuard` + `@Roles('ADMIN')`.
  */
 @ApiTags('classes')
 @ApiBearerAuth()
@@ -37,6 +40,22 @@ import { ClassesService } from '@Classes/services';
 @Controller('classes')
 export class ClassesController {
   constructor(private readonly classesService: ClassesService) {}
+
+  @Get()
+  @ApiOperation({
+    summary:
+      'Lista las clases del calendario semanal con su cupo y reservas confirmadas',
+  })
+  @ApiOkResponse({ type: ClassResponseDto, isArray: true })
+  @ApiBadRequestResponse({
+    description: 'Rango de fechas inválido (to debe ser posterior a from).',
+  })
+  async list(
+    @Query() query: ListClassesQueryDto,
+  ): Promise<ClassResponseDto[]> {
+    const items = await this.classesService.list(query);
+    return items.map((item) => ClassResponseDto.fromEntity(item));
+  }
 
   @Roles('ADMIN')
   @Post()
@@ -52,7 +71,7 @@ export class ClassesController {
   })
   @ApiConflictResponse({
     description:
-      'El entrenador ya tiene asignada otra clase grupal en ese horario (cruce con sesiones personales pendiente de H11).',
+      'El entrenador ya tiene asignada otra clase grupal o una sesión personal en ese horario.',
   })
   async create(@Body() dto: CreateClassDto): Promise<ClassResponseDto> {
     const created = await this.classesService.create(dto);
@@ -75,7 +94,7 @@ export class ClassesController {
   })
   @ApiConflictResponse({
     description:
-      'Cruce de horario con otra clase grupal del entrenador o nuevo cupo menor a las reservas confirmadas (conteo real en BD pendiente de H07; cruce con sesiones personales pendiente de H11).',
+      'Cruce de horario con otra clase grupal o sesión personal del entrenador, o nuevo cupo menor a las reservas confirmadas.',
   })
   async update(
     @Param('classId', ParseIntPipe) classId: number,
@@ -101,7 +120,7 @@ export class ClassesController {
   })
   @ApiConflictResponse({
     description:
-      'Cruce de horario con otra clase grupal del entrenador o nuevo cupo menor a las reservas confirmadas (conteo real en BD pendiente de H07; cruce con sesiones personales pendiente de H11).',
+      'Cruce de horario con otra clase grupal o sesión personal del entrenador, o nuevo cupo menor a las reservas confirmadas.',
   })
   async replace(
     @Param('classId', ParseIntPipe) classId: number,

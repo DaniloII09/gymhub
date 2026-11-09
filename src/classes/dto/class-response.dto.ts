@@ -36,8 +36,7 @@ export class ClassResponseDto {
   capacity!: number;
 
   @ApiProperty({
-    description:
-      'Cantidad de reservas confirmadas en la clase (devuelve 0 hasta que se integre el modelo de reservas de H07 / DB-7.1)',
+    description: 'Cantidad de reservas confirmadas en la clase',
     example: 0,
   })
   confirmedReservations!: number;
