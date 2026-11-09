@@ -16,6 +16,14 @@ export interface CreateMemberData {
   createdById: string;
 }
 
+export interface CreateStaffData {
+  fullName: string;
+  email: string;
+  role: 'TRAINER' | 'RECEPTION' | 'ADMIN';
+  passwordHash: string;
+  createdById: string;
+}
+
 /**
  * Único punto del módulo que habla con la tabla `users`.
  *
@@ -133,4 +141,50 @@ export class UserRepository {
       }),
     ]);
   }
+
+    /** @throws {EmailAlreadyTakenError} si el email ya existe. */
+  async createStaff(data: CreateStaffData): Promise<User> {
+    try {
+      return await this.prisma.user.create({
+        data: {
+          email: this.normalizeEmail(data.email),
+          passwordHash: data.passwordHash,
+          fullName: data.fullName,
+          role: data.role,
+          mustChangePassword: true,
+          createdById: data.createdById,
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === UNIQUE_CONSTRAINT_VIOLATION
+      ) {
+        throw new EmailAlreadyTakenError(data.email);
+      }
+      throw error;
+    }
+  }
+
+  /** Lista el personal (todo rol menos MEMBER), ordenado por nombre. */
+  async listStaff(skip: number, take: number): Promise<{ items: User[]; total: number }> {
+    const where = { role: { not: 'MEMBER' as const } };
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.user.findMany({ where, orderBy: { fullName: 'asc' }, skip, take }),
+      this.prisma.user.count({ where }),
+    ]);
+    return { items, total };
+  }
+
+  /** Desactiva y revoca todas las sesiones del usuario, en una transacción. */
+  async deactivate(userId: string): Promise<User> {
+    const [user] = await this.prisma.$transaction([
+      this.prisma.user.update({ where: { id: userId }, data: { isActive: false } }),
+      this.prisma.refreshToken.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+    return user;
+  } 
 }
