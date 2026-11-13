@@ -1,7 +1,7 @@
 import type { User, Prisma } from '@PrismaClient';
 
 /**
- * Contrato del servicio central de notificaciones (Épica 9 · H33, dueño: Juan
+ * Contrato del servicio central de notificaciones (Épica 9 · H24, dueño: Juan
  * Carlos). Requerimiento no funcional: TODOS los módulos generan sus avisos a
  * través de este servicio; ninguno construye su propia lógica de envío ni
  * guarda avisos en una tabla propia.

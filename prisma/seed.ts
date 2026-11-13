@@ -127,6 +127,34 @@ const GYM_CLASSES = [
   },
 ] as const;
 
+/**
+ * Avisos de prueba (DB-24.1 / H24): 3 avisos para miembro@gymhub.test, uno
+ * leído, para ver la bandeja y el contador de H25 sin disparar otros módulos.
+ * Se identifican por miembro y título para no duplicarlos.
+ */
+const NOTIFICATIONS_MEMBER_EMAIL = 'miembro@gymhub.test';
+const NOTIFICATIONS = [
+  {
+    source: 'MEMBERSHIPS',
+    title: 'Tu membresía vence pronto (prueba)',
+    message: 'Tu membresía Mensual vence en 5 días. Renuévala en recepción.',
+    read: false,
+  },
+  {
+    source: 'CLASSES',
+    title: 'Clase cancelada (prueba)',
+    message:
+      'La clase Yoga Flow del 10/11/2026 a las 09:00 fue cancelada. Motivo: entrenador enfermo.',
+    read: false,
+  },
+  {
+    source: 'PAYMENTS',
+    title: 'Pago registrado (prueba)',
+    message: 'Registramos tu pago de $5.00 por Clase suelta.',
+    read: true,
+  },
+] as const;
+
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
@@ -183,6 +211,7 @@ async function main() {
 
   await seedCharges();
   await seedGymClasses();
+  await seedNotifications();
 }
 
 async function seedCharges() {
@@ -309,6 +338,29 @@ async function seedGymClasses() {
     }
   }
   console.log(`${GYM_CLASSES.length} clases grupales de prueba en el horario`);
+}
+
+async function seedNotifications() {
+  const member = await prisma.user.findUniqueOrThrow({
+    where: { email: NOTIFICATIONS_MEMBER_EMAIL },
+  });
+
+  for (const { read, ...notification } of NOTIFICATIONS) {
+    const exists = await prisma.notification.count({
+      where: { userId: member.id, title: notification.title },
+    });
+    if (exists > 0) continue;
+    await prisma.notification.create({
+      data: {
+        ...notification,
+        userId: member.id,
+        readAt: read ? new Date() : null,
+      },
+    });
+  }
+  console.log(
+    `${NOTIFICATIONS.length} avisos de prueba para ${NOTIFICATIONS_MEMBER_EMAIL}`,
+  );
 }
 
 try {

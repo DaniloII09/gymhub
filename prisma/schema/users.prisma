@@ -52,6 +52,9 @@ model User {
   trainerPersonalSessions PersonalSession[] @relation("TrainerPersonalSessions")
   memberPersonalSessions  PersonalSession[] @relation("MemberPersonalSessions")
 
+  // Épica 9 · Notificaciones (H24): avisos que recibió este usuario.
+  notifications Notification[]
+
   // NOTA PARA EL EQUIPO: cuando tu modelo referencie a User (ej. Membership.member,
   // GroupClass.trainer), agregá acá la relación opuesta. Este archivo tiene
   // CODEOWNER = Danilo, así que ese cambio pasa por su revisión.

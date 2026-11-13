@@ -1,4 +1,39 @@
 // Épica 9 · Notificaciones. Dueño: Juan Carlos (DB-24.1, DB-26.1).
-// Agregá acá los modelos de tu módulo en tu feat branch. Si referencian a
-// User, agregá la relación opuesta en users.prisma (revisión de Danilo).
+// Una sola tabla de avisos para todos los módulos (H24). Solo la escribe el
+// servicio central de avisos (NotificationsModule); ningún otro módulo inserta
+// acá directamente.
 // IDs: Int autoincrement para el dominio; los usuarios usan UUID.
+
+/// Módulo que originó el aviso. Coincide con `NotificationSource` del contrato
+/// en src/common/contracts/notifications.contract.ts (uno por cada módulo del 1
+/// al 8 y el 10).
+enum NotificationSource {
+  MEMBERSHIPS
+  CHECK_INS
+  CLASSES
+  TRAINERS
+  PAYMENTS
+  ROUTINES
+  MACHINES
+  REVIEWS
+  REPORTS
+}
+
+/// Un aviso por destinatario. `readAt` vacío significa no leído.
+/// No se borra en esta versión, por eso la relación usa onDelete: Restrict.
+model Notification {
+  id          Int                @id @default(autoincrement())
+  userId      String             @map("user_id") @db.Uuid
+  title       String             @db.VarChar(80)
+  message     String             @db.VarChar(300)
+  source      NotificationSource
+  referenceId String?            @map("reference_id") @db.VarChar(40)
+  readAt      DateTime?          @map("read_at")
+  createdAt   DateTime           @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  // Bandeja y contador de no leídos de H25 filtran por usuario y lectura.
+  @@index([userId, readAt])
+  @@map("notifications")
+}
