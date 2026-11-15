@@ -1,6 +1,23 @@
 # Épica 9 · Notificaciones
 
-**H24 (SCRUM-39): Enviar avisos desde cualquier módulo.** Dueño: Juan Carlos.
+**H24 (SCRUM-39): Enviar avisos desde cualquier módulo.**
+**H25 (SCRUM-40): Ver todos mis avisos en un solo lugar.** Dueño: Juan Carlos.
+
+## Endpoints de la bandeja (BE-25.1)
+
+Todos son solo para **Miembro** y trabajan sobre los avisos del usuario del
+token. Ninguno recibe el id de otro usuario.
+
+| Método | Ruta                                    | Respuesta                                                                                                                                                 |
+| ------ | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/api/v1/notifications/me?page=1`       | 200 `{ data[], total, page, pageSize: 20 }`, del más reciente al más antiguo. Cada aviso trae `id`, `title`, `message`, `source`, `createdAt` e `isRead`. |
+| GET    | `/api/v1/notifications/me/unread-count` | 200 `{ unread }`: COUNT de avisos con `read_at` vacío.                                                                                                    |
+| PATCH  | `/api/v1/notifications/{id}/read`       | 204. Marcar uno que ya estaba leído no cambia nada.                                                                                                       |
+| PATCH  | `/api/v1/notifications/me/read-all`     | 204. Deja `unread` en 0.                                                                                                                                  |
+
+Errores: 401 sin sesión, 403 si no es Miembro, 400 si la página o el id no son
+válidos, y 404 "No encontramos ese aviso." si el aviso no existe **o es de otro
+usuario** (no se revela que existe).
 
 Un solo servicio central de avisos para todo el sistema. Ningún módulo tiene su
 propia lógica de envío ni escribe en la tabla `notifications`: todos llaman a
@@ -39,29 +56,29 @@ await this.prisma.$transaction(async (tx) => {
 guarda con la **transacción de quien llama**, así que si esa operación falla y
 se revierte, no queda ningún aviso.
 
-| Campo | Tipo | Obligatorio | Restricción |
-|---|---|---|---|
-| `recipients` | `uuid[]` | Sí | 1 a 500 usuarios existentes y activos. Un id repetido recibe un solo aviso. |
-| `title` | `string` | Sí | 1 a 80 caracteres |
-| `message` | `string` | Sí | 1 a 300 caracteres |
-| `source` | `NotificationSource` | Sí | Uno de la lista de módulos de origen |
-| `referenceId` | `string` | No | Máx. 40 caracteres, por ejemplo el id de la clase o de la membresía |
+| Campo         | Tipo                 | Obligatorio | Restricción                                                                 |
+| ------------- | -------------------- | ----------- | --------------------------------------------------------------------------- |
+| `recipients`  | `uuid[]`             | Sí          | 1 a 500 usuarios existentes y activos. Un id repetido recibe un solo aviso. |
+| `title`       | `string`             | Sí          | 1 a 80 caracteres                                                           |
+| `message`     | `string`             | Sí          | 1 a 300 caracteres                                                          |
+| `source`      | `NotificationSource` | Sí          | Uno de la lista de módulos de origen                                        |
+| `referenceId` | `string`             | No          | Máx. 40 caracteres, por ejemplo el id de la clase o de la membresía         |
 
 Los textos se guardan sin los espacios del principio y del final.
 
 ### Módulos de origen (`NotificationSource`)
 
-| Valor | Módulo |
-|---|---|
+| Valor         | Módulo                                              |
+| ------------- | --------------------------------------------------- |
 | `MEMBERSHIPS` | 1 · Membresías y planes (H26: aviso de vencimiento) |
-| `CLASSES` | 2 · Clases grupales (H27: clase cancelada) |
-| `TRAINERS` | 3 · Agenda de entrenadores |
-| `CHECK_INS` | 4 · Check-in y acceso |
-| `PAYMENTS` | 5 · Pagos y facturación |
-| `ROUTINES` | 6 · Rutinas y progreso |
-| `MACHINES` | 7 · Máquinas |
-| `REVIEWS` | 8 · Reseñas |
-| `REPORTS` | 10 · Reportes |
+| `CLASSES`     | 2 · Clases grupales (H27: clase cancelada)          |
+| `TRAINERS`    | 3 · Agenda de entrenadores                          |
+| `CHECK_INS`   | 4 · Check-in y acceso                               |
+| `PAYMENTS`    | 5 · Pagos y facturación                             |
+| `ROUTINES`    | 6 · Rutinas y progreso                              |
+| `MACHINES`    | 7 · Máquinas                                        |
+| `REVIEWS`     | 8 · Reseñas                                         |
+| `REPORTS`     | 10 · Reportes                                       |
 
 ### Errores
 
@@ -80,16 +97,16 @@ se revierte todo.
 
 ## Tabla `notifications` (DB-24.1)
 
-| Columna | Tipo | Notas |
-|---|---|---|
-| `id` | `serial` | |
-| `user_id` | `uuid` | Destinatario, FK a `users` |
-| `title` | `varchar(80)` | |
-| `message` | `varchar(300)` | |
-| `source` | enum `NotificationSource` | La base rechaza cualquier otro valor |
-| `reference_id` | `varchar(40)` | Opcional |
-| `read_at` | `timestamp` | Vacío significa no leído (lo marca H25) |
-| `created_at` | `timestamp` | |
+| Columna        | Tipo                      | Notas                                   |
+| -------------- | ------------------------- | --------------------------------------- |
+| `id`           | `serial`                  |                                         |
+| `user_id`      | `uuid`                    | Destinatario, FK a `users`              |
+| `title`        | `varchar(80)`             |                                         |
+| `message`      | `varchar(300)`            |                                         |
+| `source`       | enum `NotificationSource` | La base rechaza cualquier otro valor    |
+| `reference_id` | `varchar(40)`             | Opcional                                |
+| `read_at`      | `timestamp`               | Vacío significa no leído (lo marca H25) |
+| `created_at`   | `timestamp`               |                                         |
 
 Índice `(user_id, read_at)` para la bandeja y el contador de no leídos de H25.
 Los avisos no se borran en esta versión.
@@ -105,5 +122,8 @@ El seed carga 3 avisos de prueba para `miembro@gymhub.test`, uno de ellos leído
 ## Pruebas
 
 - Unitarias: `src/notifications/services/notifications.service.spec.ts`.
+- Unitarias de la bandeja: `src/notifications/services/notification-inbox.service.spec.ts`.
 - Integración contra la base real: `test/notifications.e2e-spec.ts` (30
-  destinatarios en una llamada, transacción revertida, validaciones y enum).
+  destinatarios en una llamada, transacción revertida, validaciones y enum) y
+  `test/notifications-inbox.e2e-spec.ts` (orden y paginación, privacidad,
+  contador, marcar uno y todos, 401, 403 y 404).
