@@ -78,6 +78,27 @@ const PAID_CHARGE = {
 const PAID_CHARGE_KEY = '00000000-0000-4000-8000-000000000015';
 
 /**
+ * Cobros vencidos de otros miembros para el listado de pagos pendientes (H17):
+ * uno con 6 días de atraso y otro con más de 30 (la pantalla lo resalta).
+ */
+const OVERDUE_CHARGES = [
+  {
+    email: 'ana.gomez@gymhub.test',
+    type: 'PERSONAL_SESSION',
+    concept: 'Sesión personal vencida (prueba)',
+    amount: 15,
+    daysToDue: -6,
+  },
+  {
+    email: 'luis.martinez@gymhub.test',
+    type: 'MEMBERSHIP',
+    concept: 'Membresía Trimestral vencida (prueba)',
+    amount: 60,
+    daysToDue: -35,
+  },
+] as const;
+
+/**
  * Clases grupales de prueba (DB-6.1 / H06): 6 clases programadas en días futuros
  * asignadas a entrenador@gymhub.test. Se identifican por nombre y entrenador
  * para no duplicarlas ni borrar datos existentes al re-ejecutar el seed.
@@ -277,6 +298,19 @@ async function seedCharges() {
   console.log(
     `cobros de prueba para ${CHARGES_MEMBER_EMAIL}: 2 pendientes y 1 pagado`,
   );
+
+  for (const { email, daysToDue, ...charge } of OVERDUE_CHARGES) {
+    const owner = await prisma.user.findUniqueOrThrow({ where: { email } });
+    const exists = await prisma.charge.count({
+      where: { memberId: owner.id, concept: charge.concept },
+    });
+    if (!exists) {
+      await prisma.charge.create({
+        data: { ...charge, memberId: owner.id, dueDate: inDays(daysToDue) },
+      });
+    }
+  }
+  console.log(`${OVERDUE_CHARGES.length} cobros vencidos de prueba (H17)`);
   /**
    * Bloques de disponibilidad (DB-10.1 / H10): bloques de ejemplo para entrenadores.
    */
