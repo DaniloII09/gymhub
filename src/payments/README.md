@@ -1,6 +1,7 @@
 # Épica 5 · Pagos y facturación
 
 **H15 (SCRUM-30): Registrar un pago en recepción.** Dueño: Jaime.
+**H16 (SCRUM-31): Pagar con tarjeta mi membresía o sesión personal.** Dueño: Jaime.
 
 ## Endpoints
 
@@ -10,6 +11,9 @@
 | GET | `/api/v1/charges/member-search?q=` | Recepción, Administrador | FE-15.1 |
 | POST | `/api/v1/payments` | Recepción, Administrador | BE-15.2 |
 | GET | `/api/v1/receipts/{receiptId}/pdf` | Recepción, Administrador o el Miembro dueño | BE-15.4 |
+| GET | `/api/v1/charges/me?status=PENDING` | Miembro | BE-16.1 |
+| GET | `/api/v1/receipts/me?page=1` | Miembro | BE-16.1 |
+| POST | `/api/v1/charges/{chargeId}/card-payment` | Miembro | BE-16.2 |
 
 ## Contrato para otros módulos: `CHARGES_SERVICE`
 
@@ -59,6 +63,25 @@ CVV: solo se guardan los últimos 4 dígitos.
 - Pagar un cobro `PAID` responde 409 "Este cobro ya está pagado."
 - Cobros, pagos y comprobantes nunca se borran.
 
+## Pago en línea del miembro (H16)
+
+- El miembro siempre sale del token: ninguna ruta recibe el id de otro miembro.
+- `POST /charges/{chargeId}/card-payment` usa la **misma transacción** que
+  H15 (`PaymentRepository.pay`) con `ownerId`: después del `FOR UPDATE`, si el
+  cobro es de otro miembro responde 404 "No encontramos ese cobro.", igual que
+  si no existiera. La revisión del dueño va **antes** de mirar la clave de
+  idempotencia, para que una clave ajena no revele nada.
+- Mismas reglas que H15: el monto sale del cobro, la misma clave devuelve el
+  resultado original, rechazo = 400 con el motivo, ya pagado = 409. Dos
+  solicitudes con claves distintas sobre el mismo cobro dejan un solo pago
+  APPROVED.
+- El pago queda registrado por el propio miembro (`registered_by_id`).
+- `membershipStatus`: solo en cobros de membresía. Lo calcula H04 con el
+  contrato `MEMBERSHIP_STATUS_SERVICE`; `MembershipStatusLookup` lo busca con
+  `ModuleRef` (sin importar MembershipsModule, que ya importa PaymentsModule).
+  Mientras H04 no registre el contrato, responde `null`.
+- `GET /receipts/me` ordena por `issuedAt` descendente, 20 por página.
+
 ## Diagrama entidad-relación
 
 ```mermaid
@@ -107,5 +130,6 @@ del id de `receipts` (el comprobante 7 es `C-000007`).
 
 - **H04:** cuando exista `Membership`, agregar la relación `Charge.membership`.
   Según el contrato `membership-status`, la membresía queda activa en cuanto su
-  cobro está `PAID`.
+  cobro está `PAID`. Cuando H04 registre `MEMBERSHIP_STATUS_SERVICE`, H16
+  empieza a devolver `membershipStatus` sin cambios en este módulo.
 - **H01:** buscar y mostrar por `fullName` y `memberCode` en lugar del correo.

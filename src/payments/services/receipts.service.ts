@@ -1,6 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import PDFDocument from 'pdfkit';
-import { ReceiptRepository, type ReceiptDetail } from '@Payments/repositories';
+import { paginate, type Paginated } from '@Common/pagination';
+import {
+  ReceiptRepository,
+  type ReceiptDetail,
+  type ReceiptSummary,
+} from '@Payments/repositories';
 import type { User } from '@PrismaClient';
 
 export const RECEIPT_NOT_FOUND_MESSAGE = 'No encontramos ese comprobante.';
@@ -10,10 +15,25 @@ const STAFF_ROLES: User['role'][] = ['RECEPTION', 'ADMIN'];
 
 const METHOD_LABEL = { CASH: 'Efectivo', CARD: 'Tarjeta' } as const;
 
-/** Comprobante en PDF (BE-15.4). */
+/** Comprobante en PDF (BE-15.4) y lista de comprobantes del miembro (BE-16.1). */
 @Injectable()
 export class ReceiptsService {
   constructor(private readonly receiptRepository: ReceiptRepository) {}
+
+  /**
+   * GET /receipts/me (BE-16.1): comprobantes del miembro autenticado, del más
+   * reciente al más antiguo.
+   */
+  async listMine(
+    memberId: string,
+    page: { page: number; pageSize: number },
+  ): Promise<Paginated<ReceiptSummary>> {
+    const { rows, total } = await this.receiptRepository.findByMember(
+      memberId,
+      page,
+    );
+    return paginate(rows, total, page);
+  }
 
   /**
    * Lo pueden pedir Recepción, Administrador o el Miembro dueño del cobro.

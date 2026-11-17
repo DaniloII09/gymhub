@@ -2,11 +2,13 @@ import { Module } from '@nestjs/common';
 import { CHARGES_SERVICE } from '@Common/contracts';
 import {
   ChargesController,
+  MemberPaymentsController,
   PaymentsController,
   ReceiptsController,
 } from '@Payments/controllers';
 import {
   ChargesService,
+  MembershipStatusLookup,
   PaymentGatewayService,
   PaymentsService,
   ReceiptsService,
@@ -19,13 +21,20 @@ import {
 
 // Épica 5 · Pagos y facturación. Dueño: Jaime.
 @Module({
-  controllers: [ChargesController, PaymentsController, ReceiptsController],
+  controllers: [
+    ChargesController,
+    // H16: "Mis pagos" del miembro.
+    MemberPaymentsController,
+    PaymentsController,
+    ReceiptsController,
+  ],
   providers: [
     ChargesService,
     // Otros módulos (H04, H11) inyectan el contrato, no la clase concreta.
     { provide: CHARGES_SERVICE, useExisting: ChargesService },
     PaymentGatewayService,
     PaymentsService,
+    MembershipStatusLookup,
     ReceiptsService,
     ChargeRepository,
     PaymentRepository,
