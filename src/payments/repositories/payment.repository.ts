@@ -5,7 +5,7 @@ import {
   ChargeNotFoundError,
   IdempotencyKeyReusedError,
 } from '@Payments/errors';
-import { Prisma, type PaymentMethod } from '@PrismaClient';
+import { Prisma, type ChargeType, type PaymentMethod } from '@PrismaClient';
 
 /** Código de Prisma para violación de restricción única. */
 const UNIQUE_CONSTRAINT_VIOLATION = 'P2002';
@@ -30,6 +30,11 @@ export interface PayChargeData {
   method: PaymentMethod;
   idempotencyKey: string;
   registeredById: string;
+  /**
+   * H16: si viene, el cobro debe ser de este miembro. Si es de otro, se
+   * responde igual que si no existiera (ChargeNotFoundError).
+   */
+  ownerId?: string;
   /** Se llama con el monto guardado del cobro, ya bloqueado. */
   authorize: (amount: number) => Promise<Authorization>;
 }
@@ -38,6 +43,9 @@ export interface PayChargeData {
 export interface ApprovedPayment {
   paymentId: number;
   chargeId: number;
+  /** H16: con MEMBERSHIP se informa el estado de la membresía. */
+  chargeType: ChargeType;
+  memberId: string;
   concept: string;
   amount: number;
   method: PaymentMethod;
@@ -69,13 +77,15 @@ export class PaymentRepository {
    *
    * 1. Bloquea el cobro con SELECT … FOR UPDATE: otra solicitud sobre el mismo
    *    cobro espera aquí hasta que esta termine.
+   *    Si se pidió un dueño (H16) y el cobro es de otro miembro, responde como
+   *    si no existiera.
    * 2. Si la clave de idempotencia ya existe para este cobro, devuelve el
    *    resultado original sin cobrar dos veces.
    * 3. Toma el monto del cobro guardado (nunca de la solicitud) y lo autoriza.
    * 4. Guarda el intento. Si fue rechazado, el cobro sigue PENDING.
    * 5. Si fue aprobado, emite el comprobante y pasa el cobro a PAID.
    *
-   * @throws {ChargeNotFoundError} si el cobro no existe.
+   * @throws {ChargeNotFoundError} si el cobro no existe o no es de `ownerId`.
    * @throws {ChargeAlreadyPaidError} si el cobro ya está pagado.
    * @throws {IdempotencyKeyReusedError} si la clave se usó con otro cobro.
    */
@@ -111,15 +121,21 @@ export class PaymentRepository {
       SELECT id FROM charges WHERE id = ${data.chargeId} FOR UPDATE`;
     if (locked.length === 0) throw new ChargeNotFoundError(data.chargeId);
 
+    const charge = await tx.charge.findUniqueOrThrow({
+      where: { id: data.chargeId },
+    });
+    // Antes de mirar la clave: un miembro no debe enterarse de nada sobre un
+    // cobro ajeno, ni siquiera si ya tiene pagos.
+    if (data.ownerId !== undefined && charge.memberId !== data.ownerId) {
+      throw new ChargeNotFoundError(data.chargeId);
+    }
+
     const previous = await tx.payment.findUnique({
       where: { idempotencyKey: data.idempotencyKey },
       include: WITH_RECEIPT,
     });
     if (previous) return this.toOutcome(previous, data.chargeId);
 
-    const charge = await tx.charge.findUniqueOrThrow({
-      where: { id: data.chargeId },
-    });
     if (charge.status === 'PAID') throw new ChargeAlreadyPaidError(charge.id);
 
     const amount = Number(charge.amount);
@@ -172,6 +188,8 @@ export class PaymentRepository {
       payment: {
         paymentId: payment.id,
         chargeId: charge.id,
+        chargeType: charge.type,
+        memberId: charge.memberId,
         concept: charge.concept,
         amount,
         method: payment.method,
@@ -202,6 +220,8 @@ export class PaymentRepository {
       payment: {
         paymentId: previous.id,
         chargeId: previous.chargeId,
+        chargeType: previous.charge.type,
+        memberId: previous.charge.memberId,
         concept: previous.charge.concept,
         amount: Number(previous.charge.amount),
         method: previous.method,

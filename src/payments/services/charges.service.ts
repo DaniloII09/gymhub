@@ -63,6 +63,14 @@ export class ChargesService implements ChargesContract {
     return this.chargeRepository.findByMember(memberId, status);
   }
 
+  /**
+   * GET /charges/me (BE-16.1): cobros del miembro autenticado. El id sale del
+   * token; no hay forma de pedir los de otro miembro.
+   */
+  listMine(memberId: string, status?: ChargeStatus): Promise<Charge[]> {
+    return this.chargeRepository.findByMember(memberId, status);
+  }
+
   /** GET /charges/member-search: miembros para la pantalla de cobro (FE-15.1). */
   searchMembers(term: string): Promise<MemberOption[]> {
     if (term.trim().length < 2) {

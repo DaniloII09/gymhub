@@ -84,4 +84,19 @@ describe('ChargesService', () => {
       );
     });
   });
+
+  describe('listMine (H16)', () => {
+    it('devuelve los cobros del miembro del token sin pasar por la búsqueda de miembro', async () => {
+      repository.findByMember.mockResolvedValue([{ id: 1 }]);
+
+      await expect(service.listMine(MEMBER_ID, 'PENDING')).resolves.toEqual([
+        { id: 1 },
+      ]);
+      expect(repository.findByMember).toHaveBeenCalledWith(
+        MEMBER_ID,
+        'PENDING',
+      );
+      expect(repository.memberExists).not.toHaveBeenCalled();
+    });
+  });
 });
