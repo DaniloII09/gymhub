@@ -4,6 +4,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  Patch,
   ParseIntPipe,
   Post,
   Query,
@@ -62,6 +63,19 @@ export class ClassReservationsController {
     return {
       data: items.map((item) => ClassReservationResponseDto.fromEntity(item)),
     };
+  }
+
+  @Patch('reservations/:reservationId/cancel')
+  @ApiOperation({ summary: 'Cancela una reserva propia hasta 2 horas antes (BE-8.1)' })
+  @ApiOkResponse({ type: ClassReservationResponseDto })
+  @ApiNotFoundResponse({ description: 'La reserva no existe o pertenece a otro miembro.' })
+  @ApiConflictResponse({ description: 'La clase inicia en menos de 2 horas.' })
+  async cancelMine(
+    @Param('reservationId', ParseIntPipe) reservationId: number,
+    @CurrentUser() user: User,
+  ): Promise<ClassReservationResponseDto> {
+    const cancelled = await this.reservationsService.cancelMine(reservationId, user.id);
+    return ClassReservationResponseDto.fromEntity(cancelled);
   }
 
   @Post(':classId/reservations')
