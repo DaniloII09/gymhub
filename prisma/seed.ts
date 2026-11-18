@@ -232,6 +232,7 @@ async function main() {
 
   await seedCharges();
   await seedGymClasses();
+  await seedPersonalSessionPricing();
   await seedNotifications();
 }
 
@@ -372,6 +373,38 @@ async function seedGymClasses() {
     }
   }
   console.log(`${GYM_CLASSES.length} clases grupales de prueba en el horario`);
+}
+
+/**
+ * Carga idempotente del precio inicial de sesión personal (DB-11.1 / H11).
+ * Solo persiste el precio si se definió explícitamente en entorno
+ * (`SEED_PERSONAL_SESSION_PRICE` o `PERSONAL_SESSION_PRICE`); si negocio aún no
+ * definió la tarifa oficial, no inventa ningún monto silenciosamente.
+ */
+async function seedPersonalSessionPricing() {
+  const rawPrice =
+    process.env.SEED_PERSONAL_SESSION_PRICE ?? process.env.PERSONAL_SESSION_PRICE;
+  if (!rawPrice) {
+    console.log(
+      'precio de sesión personal no configurado (pendiente definir SEED_PERSONAL_SESSION_PRICE / PERSONAL_SESSION_PRICE)',
+    );
+    return;
+  }
+
+  const parsed = Number(rawPrice);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(
+      'SEED_PERSONAL_SESSION_PRICE / PERSONAL_SESSION_PRICE debe ser un número positivo.',
+    );
+  }
+
+  const price = Math.round(parsed * 100) / 100;
+  await prisma.personalSessionPricing.upsert({
+    where: { id: 1 },
+    update: {},
+    create: { id: 1, price },
+  });
+  console.log(`precio inicial de sesión personal configurado ($${price.toFixed(2)})`);
 }
 
 async function seedNotifications() {

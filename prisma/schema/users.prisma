@@ -49,8 +49,9 @@ model User {
   classReservations ClassReservation[] @relation("MemberClassReservations")
 
   // Épica 3 · Sesiones personales (H11): sesiones personales como entrenador o como miembro.
-  trainerPersonalSessions PersonalSession[] @relation("TrainerPersonalSessions")
-  memberPersonalSessions  PersonalSession[] @relation("MemberPersonalSessions")
+  trainerPersonalSessions      PersonalSession[]        @relation("TrainerPersonalSessions")
+  memberPersonalSessions       PersonalSession[]        @relation("MemberPersonalSessions")
+  updatedSessionPricingConfigs PersonalSessionPricing[] @relation("PersonalSessionPricingUpdatedBy")
 
   // Épica 9 · Notificaciones (H24): avisos que recibió este usuario.
   notifications Notification[]
