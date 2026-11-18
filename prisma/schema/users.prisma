@@ -54,6 +54,7 @@ model User {
 
   // Épica 9 · Notificaciones (H24): avisos que recibió este usuario.
   notifications Notification[]
+  expiryNotices ExpiryNotice[]
 
   // NOTA PARA EL EQUIPO: cuando tu modelo referencie a User (ej. Membership.member,
   // GroupClass.trainer), agregá acá la relación opuesta. Este archivo tiene

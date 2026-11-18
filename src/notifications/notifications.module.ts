@@ -3,13 +3,18 @@ import {
   CLASS_CANCELLATION_NOTIFIER,
   NOTIFICATION_SERVICE,
 } from '@Common/contracts';
-import { NotificationsController } from '@Notifications/controllers';
+import {
+  ExpiryNoticesController,
+  NotificationsController,
+} from '@Notifications/controllers';
 import {
   ClassCancellationRepository,
   NotificationRepository,
 } from '@Notifications/repositories';
 import {
   ClassCancellationNoticesService,
+  ExpiryNoticesJob,
+  ExpiryNoticesService,
   NotificationInboxService,
   NotificationsService,
 } from '@Notifications/services';
@@ -17,7 +22,7 @@ import {
 // Épica 9 · Notificaciones. Dueño: Juan Carlos.
 // Contrato para los demás módulos en ./README.md.
 @Module({
-  controllers: [NotificationsController],
+  controllers: [NotificationsController, ExpiryNoticesController],
   providers: [
     NotificationsService,
     // Los demás módulos (H26, H27) inyectan el contrato, no la clase concreta.
@@ -31,6 +36,9 @@ import {
       provide: CLASS_CANCELLATION_NOTIFIER,
       useExisting: ClassCancellationNoticesService,
     },
+    // H26: avisos de vencimiento, todos los días a las 07:00 (El Salvador).
+    ExpiryNoticesService,
+    ExpiryNoticesJob,
   ],
   exports: [NOTIFICATION_SERVICE, CLASS_CANCELLATION_NOTIFIER],
 })
