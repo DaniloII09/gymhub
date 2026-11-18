@@ -10,7 +10,9 @@ enum PersonalSessionStatus {
 }
 
 /// Sesión personal de entrenamiento agendada con un entrenador (DB-11.1 / H06-H11).
-/// endsAt debe ser mayor que startsAt (restricción CHECK en la migración).
+/// endsAt debe ser mayor que startsAt y price > 0 (restricciones CHECK en la migración).
+/// Un índice único parcial en PostgreSQL impide dos sesiones SCHEDULED del mismo
+/// entrenador con el mismo startsAt.
 model PersonalSession {
   id                  Int                   @id @default(autoincrement())
   trainerId           String                @map("trainer_id") @db.Uuid
@@ -18,6 +20,8 @@ model PersonalSession {
   availabilityBlockId String?               @map("availability_block_id") @db.Uuid
   startsAt            DateTime              @map("starts_at")
   endsAt              DateTime              @map("ends_at")
+  price               Decimal?              @db.Decimal(8, 2)
+  chargeId            Int?                  @unique @map("charge_id")
   status              PersonalSessionStatus @default(SCHEDULED)
   createdAt           DateTime              @default(now()) @map("created_at")
   updatedAt           DateTime              @updatedAt @map("updated_at")
@@ -29,4 +33,18 @@ model PersonalSession {
   @@index([trainerId, startsAt])
   @@index([memberId, startsAt])
   @@map("personal_sessions")
+}
+
+/// Configuración del precio vigente para sesiones personales de 60 minutos (DB-11.1).
+/// Se mantiene configurable sin tarifa fija hardcoded mientras negocio define el valor oficial.
+model PersonalSessionPricing {
+  id          Int      @id @default(1)
+  price       Decimal  @db.Decimal(8, 2)
+  updatedById String?  @map("updated_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  updatedBy User? @relation("PersonalSessionPricingUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@map("personal_session_pricing")
 }
