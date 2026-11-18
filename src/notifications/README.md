@@ -66,6 +66,44 @@ se revierte, no queda ningún aviso.
 
 Los textos se guardan sin los espacios del principio y del final.
 
+## Aviso de clase cancelada para H09: `CLASS_CANCELLATION_NOTIFIER` (BE-27.1)
+
+H09 (cancelar una clase) no arma el aviso: inyecta este contrato y lo llama
+**dentro de su transacción y antes de cambiar las reservas**, porque se avisa a
+las reservas que en ese momento siguen confirmadas.
+
+```ts
+// En ClassesModule: imports: [NotificationsModule]
+import {
+  CLASS_CANCELLATION_NOTIFIER,
+  type ClassCancellationNotifier,
+} from '@Common/contracts';
+
+constructor(
+  @Inject(CLASS_CANCELLATION_NOTIFIER)
+  private readonly cancellationNotices: ClassCancellationNotifier,
+) {}
+
+await this.prisma.$transaction(async (tx) => {
+  await this.cancellationNotices.notifyClassCancelled(
+    { classId, reason }, // el motivo ya validado de 5 a 200 caracteres
+    tx,
+  );
+  // ...pasar la clase a CANCELLED y sus reservas a "Cancelada por el gimnasio"
+});
+```
+
+- Avisa solo a los miembros activos con reserva `CONFIRMED`. Quien canceló su
+  reserva o no tenía reserva no recibe nada.
+- Título "Clase cancelada" y mensaje "La clase {nombre} del {dd/mm/aaaa} a las
+  {hh:mm} fue cancelada. Motivo: {motivo}.", con la fecha y hora de
+  `America/El_Salvador`. Si nombre y motivo no caben en 300 caracteres, el
+  motivo se recorta con "…".
+- `referenceId` es `class:{id}` y el módulo de origen es `CLASSES`.
+- Devuelve cuántos avisos creó; con 0 reservas confirmadas devuelve 0 sin error.
+- Si la clase no existe lanza `ClassNotFoundForNoticeError`. Si la transacción
+  de H09 se revierte, no queda ningún aviso.
+
 ### Módulos de origen (`NotificationSource`)
 
 | Valor         | Módulo                                              |
@@ -123,7 +161,11 @@ El seed carga 3 avisos de prueba para `miembro@gymhub.test`, uno de ellos leído
 
 - Unitarias: `src/notifications/services/notifications.service.spec.ts`.
 - Unitarias de la bandeja: `src/notifications/services/notification-inbox.service.spec.ts`.
+- Unitarias del aviso de clase cancelada: `src/notifications/services/class-cancellation-notices.service.spec.ts`.
 - Integración contra la base real: `test/notifications.e2e-spec.ts` (30
   destinatarios en una llamada, transacción revertida, validaciones y enum) y
   `test/notifications-inbox.e2e-spec.ts` (orden y paginación, privacidad,
   contador, marcar uno y todos, 401, 403 y 404).
+  `test/class-cancellation-notices.e2e-spec.ts` cubre H27: 14 reservas
+  confirmadas y 2 canceladas por el miembro generan 14 avisos, y si la
+  transacción se revierte no queda ninguno.

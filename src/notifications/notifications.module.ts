@@ -1,8 +1,15 @@
 import { Module } from '@nestjs/common';
-import { NOTIFICATION_SERVICE } from '@Common/contracts';
-import { NotificationsController } from '@Notifications/controllers';
-import { NotificationRepository } from '@Notifications/repositories';
 import {
+  CLASS_CANCELLATION_NOTIFIER,
+  NOTIFICATION_SERVICE,
+} from '@Common/contracts';
+import { NotificationsController } from '@Notifications/controllers';
+import {
+  ClassCancellationRepository,
+  NotificationRepository,
+} from '@Notifications/repositories';
+import {
+  ClassCancellationNoticesService,
   NotificationInboxService,
   NotificationsService,
 } from '@Notifications/services';
@@ -17,7 +24,14 @@ import {
     { provide: NOTIFICATION_SERVICE, useExisting: NotificationsService },
     NotificationInboxService,
     NotificationRepository,
+    // H27: H09 lo inyecta para avisar a quienes reservaron una clase cancelada.
+    ClassCancellationNoticesService,
+    ClassCancellationRepository,
+    {
+      provide: CLASS_CANCELLATION_NOTIFIER,
+      useExisting: ClassCancellationNoticesService,
+    },
   ],
-  exports: [NOTIFICATION_SERVICE],
+  exports: [NOTIFICATION_SERVICE, CLASS_CANCELLATION_NOTIFIER],
 })
 export class NotificationsModule {}
