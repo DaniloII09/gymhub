@@ -22,6 +22,11 @@ export interface CurrentMembership {
   planType: PlanType | null;
   endDate: Date | null;
   daysLeft: number | null;
+  /**
+   * Solo para la clase suelta (DROP_IN): la clase que incluye. Opcional para
+   * no obligar a quien implementa el contrato; H05 la muestra si viene.
+   */
+  includedClass?: { name: string; startsAt: Date } | null;
 }
 
 export interface MembershipStatusService {
