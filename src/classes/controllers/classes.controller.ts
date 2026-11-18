@@ -21,7 +21,7 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
-import { Roles } from '@Auth/decorators';
+import { CurrentUser, Roles } from '@Auth/decorators';
 import {
   ClassResponseDto,
   CreateClassDto,
@@ -29,6 +29,7 @@ import {
   UpdateClassDto,
 } from '@Classes/dto';
 import { ClassesService } from '@Classes/services';
+import type { User } from '@PrismaClient';
 
 /**
  * Programación, edición y consulta del calendario de clases grupales (H06 / H07).
@@ -44,16 +45,20 @@ export class ClassesController {
   @Get()
   @ApiOperation({
     summary:
-      'Lista las clases del calendario semanal con su cupo y reservas confirmadas',
+      'Lista las clases del calendario con su cupo, reservas confirmadas y spotsLeft',
+    description:
+      'Para MEMBER solo devuelve clases SCHEDULED dentro de un rango máximo de 7 días (BE-7.1). Para ADMIN devuelve también las CANCELLED.',
   })
   @ApiOkResponse({ type: ClassResponseDto, isArray: true })
   @ApiBadRequestResponse({
-    description: 'Rango de fechas inválido (to debe ser posterior a from).',
+    description:
+      'Rango de fechas inválido (to debe ser posterior a from, o mayor a 7 días para MEMBER).',
   })
   async list(
+    @CurrentUser() user: User,
     @Query() query: ListClassesQueryDto,
   ): Promise<ClassResponseDto[]> {
-    const items = await this.classesService.list(query);
+    const items = await this.classesService.list(query, user);
     return items.map((item) => ClassResponseDto.fromEntity(item));
   }
 

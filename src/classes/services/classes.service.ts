@@ -33,6 +33,7 @@ import {
   ClassRepository,
   type GymClassWithDetails,
 } from '@Classes/repositories';
+import type { User } from '@PrismaClient';
 
 export const CLASS_NOT_FOUND_MESSAGE = 'No encontramos esa clase.';
 export const CLASS_NOT_SCHEDULED_MESSAGE =
@@ -41,9 +42,14 @@ export const TRAINER_NOT_FOUND_MESSAGE =
   'No encontramos al entrenador seleccionado.';
 export const INVALID_TRAINER_ROLE_MESSAGE =
   'El usuario seleccionado como entrenador debe tener el rol TRAINER.';
+export const MAX_MEMBER_CLASSES_RANGE_DAYS = 7;
+export const MEMBER_RANGE_EXCEEDED_MESSAGE =
+  'El rango de consulta para miembros no puede superar los 7 días.';
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /**
- * Lógica de negocio para programar y editar clases grupales (H06 / BE-6.1).
+ * Lógica de negocio para programar y editar clases grupales (H06 / BE-6.1)
+ * y listar la oferta de clases con cupos disponibles (H07 / BE-7.1).
  *
  * No conoce Prisma directamente: delega la persistencia y las transacciones a
  * `ClassRepository` y traduce los errores de dominio a excepciones HTTP.
@@ -52,8 +58,35 @@ export const INVALID_TRAINER_ROLE_MESSAGE =
 export class ClassesService {
   constructor(private readonly classRepository: ClassRepository) {}
 
-  async list(query?: ListClassesQueryDto): Promise<GymClassWithDetails[]> {
+  async list(
+    query?: ListClassesQueryDto,
+    actor?: Pick<User, 'role'>,
+  ): Promise<GymClassWithDetails[]> {
     const now = new Date();
+
+    if (actor?.role === 'MEMBER') {
+      const days = query?.days ?? MAX_MEMBER_CLASSES_RANGE_DAYS;
+      if (days > MAX_MEMBER_CLASSES_RANGE_DAYS) {
+        throw new BadRequestException(MEMBER_RANGE_EXCEEDED_MESSAGE);
+      }
+
+      const from = query?.from ?? now;
+      const to = query?.to ?? new Date(from.getTime() + days * MS_PER_DAY);
+
+      if (to.getTime() <= from.getTime()) {
+        throw new BadRequestException(
+          'La fecha final del filtro (to) debe ser posterior a la fecha inicial (from).',
+        );
+      }
+
+      if (to.getTime() - from.getTime() > MAX_MEMBER_CLASSES_RANGE_DAYS * MS_PER_DAY) {
+        throw new BadRequestException(MEMBER_RANGE_EXCEEDED_MESSAGE);
+      }
+
+      // BE-7.1: al miembro solo se le muestran clases SCHEDULED, nunca CANCELLED.
+      return this.classRepository.listByRange(from, to, 'SCHEDULED');
+    }
+
     const utcDay = now.getUTCDay();
     const diffToMonday = utcDay === 0 ? -6 : 1 - utcDay;
     const defaultFrom = new Date(
@@ -68,9 +101,9 @@ export class ClassesService {
       ),
     );
 
+    const days = query?.days ?? MAX_MEMBER_CLASSES_RANGE_DAYS;
     const from = query?.from ?? defaultFrom;
-    const to =
-      query?.to ?? new Date(from.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const to = query?.to ?? new Date(from.getTime() + days * MS_PER_DAY);
 
     if (to.getTime() <= from.getTime()) {
       throw new BadRequestException(

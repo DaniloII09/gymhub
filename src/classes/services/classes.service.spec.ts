@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import {
+  ClassResponseDto,
   CLASS_CAPACITY_RANGE_MESSAGE,
   CLASS_DURATION_RANGE_MESSAGE,
   CLASS_NAME_LENGTH_MESSAGE,
@@ -28,6 +29,7 @@ import {
   CLASS_NOT_SCHEDULED_MESSAGE,
   ClassesService,
   INVALID_TRAINER_ROLE_MESSAGE,
+  MEMBER_RANGE_EXCEEDED_MESSAGE,
   TRAINER_NOT_FOUND_MESSAGE,
 } from '@Classes/services';
 import type { PrismaService } from '@Prisma/services';
@@ -117,6 +119,42 @@ describe('ClassesService', () => {
         BadRequestException,
       );
       expect(repository.listByRange).not.toHaveBeenCalled();
+    });
+
+    it('para MEMBER lista solo clases SCHEDULED en un rango máximo de 7 días', async () => {
+      const from = new Date('2026-12-01T00:00:00.000Z');
+      const to = new Date('2026-12-08T00:00:00.000Z');
+      repository.listByRange.mockResolvedValue([sampleClass()]);
+
+      await service.list({ from, to }, { role: 'MEMBER' });
+
+      expect(repository.listByRange).toHaveBeenCalledWith(
+        from,
+        to,
+        'SCHEDULED',
+      );
+    });
+
+    it('para MEMBER rechaza un rango de 8 días con HTTP 400 (from..to y days=8)', async () => {
+      const from = new Date('2026-12-01T00:00:00.000Z');
+      const eightDaysLater = new Date('2026-12-09T00:00:00.000Z');
+
+      await expect(
+        service.list({ from, to: eightDaysLater }, { role: 'MEMBER' }),
+      ).rejects.toThrow(new BadRequestException(MEMBER_RANGE_EXCEEDED_MESSAGE));
+
+      await expect(
+        service.list({ days: 8 }, { role: 'MEMBER' }),
+      ).rejects.toThrow(new BadRequestException(MEMBER_RANGE_EXCEEDED_MESSAGE));
+
+      expect(repository.listByRange).not.toHaveBeenCalled();
+    });
+
+    it('ClassResponseDto calcula spotsLeft = capacity - confirmedReservations (ej. 20 - 17 = 3)', () => {
+      const dto = ClassResponseDto.fromEntity(
+        sampleClass({ capacity: 20, confirmedReservations: 17 }),
+      );
+      expect(dto.spotsLeft).toBe(3);
     });
   });
 

@@ -37,9 +37,15 @@ export class ClassResponseDto {
 
   @ApiProperty({
     description: 'Cantidad de reservas confirmadas en la clase',
-    example: 0,
+    example: 17,
   })
   confirmedReservations!: number;
+
+  @ApiProperty({
+    description: 'Cupos disponibles restantes (capacity - confirmedReservations)',
+    example: 3,
+  })
+  spotsLeft!: number;
 
   @ApiProperty({ enum: ClassStatus, example: ClassStatus.SCHEDULED })
   status!: ClassStatus;
@@ -64,6 +70,7 @@ export class ClassResponseDto {
       endsAt: entity.endsAt,
       capacity: entity.capacity,
       confirmedReservations: entity.confirmedReservations,
+      spotsLeft: Math.max(0, entity.capacity - entity.confirmedReservations),
       status: entity.status,
       createdAt: entity.createdAt,
       updatedAt: entity.updatedAt,
