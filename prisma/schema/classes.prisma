@@ -36,20 +36,24 @@ model GymClass {
 }
 
 /// Reserva de un miembro en una clase grupal (DB-7.1 / H06-H07).
+/// La unicidad de una reserva activa se garantiza mediante un índice único
+/// parcial en PostgreSQL (`WHERE status = 'CONFIRMED'`), permitiendo volver a
+/// reservar cuando una reserva previa quedó `CANCELLED` sin perder historial.
 model ClassReservation {
-  id        Int               @id @default(autoincrement())
-  classId   Int               @map("class_id")
-  memberId  String            @map("member_id") @db.Uuid
-  status    ReservationStatus @default(CONFIRMED)
-  createdAt DateTime          @default(now()) @map("created_at")
-  updatedAt DateTime          @updatedAt @map("updated_at")
+  id          Int               @id @default(autoincrement())
+  classId     Int               @map("class_id")
+  memberId    String            @map("member_id") @db.Uuid
+  status      ReservationStatus @default(CONFIRMED)
+  cancelledAt DateTime?         @map("cancelled_at")
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
 
   gymClass GymClass @relation(fields: [classId], references: [id], onDelete: Restrict)
   member   User     @relation("MemberClassReservations", fields: [memberId], references: [id], onDelete: Restrict)
 
-  @@unique([classId, memberId])
   @@index([classId, status])
   @@index([memberId, status])
+  @@index([classId, memberId])
   @@map("class_reservations")
 }
 

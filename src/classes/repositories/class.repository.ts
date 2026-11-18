@@ -8,7 +8,7 @@ import {
   TrainerNotFoundError,
   TrainerScheduleConflictError,
 } from '@Classes/errors';
-import type { GymClass, Prisma } from '@PrismaClient';
+import type { ClassStatus, GymClass, Prisma } from '@PrismaClient';
 
 export interface CreateGymClassData {
   name: string;
@@ -60,13 +60,18 @@ export class ClassRepository {
    * Lista las clases dentro del rango `[from, to]` ordenadas por hora de inicio,
    * incluyendo datos del entrenador y el conteo real de reservas confirmadas.
    */
-  async listByRange(from: Date, to: Date): Promise<GymClassWithDetails[]> {
+  async listByRange(
+    from: Date,
+    to: Date,
+    status?: ClassStatus,
+  ): Promise<GymClassWithDetails[]> {
     const classes = await this.prisma.gymClass.findMany({
       where: {
         startsAt: {
           gte: from,
           lte: to,
         },
+        ...(status ? { status } : {}),
       },
       include: {
         ...WITH_TRAINER,

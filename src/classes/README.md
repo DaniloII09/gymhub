@@ -1,15 +1,18 @@
 # Épica 2 · Clases grupales
 
-**H06 (SCRUM-21): Programar las clases grupales.** Dueño: Luis Guzmán.
+**H06 (SCRUM-21): Programar las clases grupales.**
+**H07 (SCRUM-22): Reservar un cupo en una clase.** Dueño: Luis Guzmán.
 
-## Endpoints implementados (SCRUM-74 / BE-6.1)
+## Endpoints implementados (BE-6.1, BE-7.1 y BE-7.2)
 
 | Método | Ruta | Rol | Subtarea | Descripción |
 |---|---|---|---|---|
-| `GET` | `/api/v1/classes` | Autenticado (`ADMIN`, `MEMBER`, `TRAINER`, `RECEPTION`) | BE-6.1 / BE-7.1 | Lista las clases del calendario semanal (`from`, `to`) con su cupo y reservas confirmadas |
-| `POST` | `/api/v1/classes` | `ADMIN` | BE-6.1 | Programa una nueva clase grupal (`status = SCHEDULED`) |
-| `PATCH` | `/api/v1/classes/{classId}` | `ADMIN` | BE-6.1 | Edita nombre, entrenador, horario o cupo de una clase programada |
-| `PUT` | `/api/v1/classes/{classId}` | `ADMIN` | BE-6.1 | Alias de edición sobre una clase programada |
+| `GET` | `/api/v1/classes` | Autenticado (`ADMIN`, `MEMBER`, `TRAINER`, `RECEPTION`) | BE-6.1 / BE-7.1 | Para `ADMIN`: lista `SCHEDULED` y `CANCELLED`. Para `MEMBER`: lista solo `SCHEDULED` en un rango máximo de 7 días (8 días -> `400`), incluyendo `confirmedReservations` y `spotsLeft`. |
+| `POST` | `/api/v1/classes` | `ADMIN` | BE-6.1 | Programa una nueva clase grupal (`status = SCHEDULED`). |
+| `PATCH` | `/api/v1/classes/{classId}` | `ADMIN` | BE-6.1 | Edita nombre, entrenador, horario o cupo de una clase programada. |
+| `PUT` | `/api/v1/classes/{classId}` | `ADMIN` | BE-6.1 | Alias de edición sobre una clase programada. |
+| `POST` | `/api/v1/classes/{classId}/reservations` | `MEMBER` | BE-7.2 | Reserva un cupo para el miembro del token con bloqueo `FOR UPDATE` (`CLASS_FULL` -> `409`). Requiere `MEMBERSHIP_STATUS_SERVICE` (`MONTHLY`/`QUARTERLY` `ACTIVE`; falla cerrado con `503` mientras H04/BE-4.3 no esté registrado). |
+| `GET` | `/api/v1/classes/reservations/me` | `MEMBER` | BE-7.2 | Lista las reservas del miembro autenticado para "Mis reservas". |
 
 ---
 
@@ -185,3 +188,11 @@ El repositorio actual (`gymhub`) contiene la API backend; a continuación se doc
 | `404 Not Found` | Clase o entrenador inexistente | `"No encontramos esa clase."` |
 | `409 Conflict` | Reducción de cupo por debajo de reservas confirmadas reales en BD | `"El cupo no puede ser menor a las 12 reservas confirmadas."` |
 | `409 Conflict` | Cruce de horario del entrenador con otra clase grupal o sesión personal | `"El entrenador ya tiene asignada la clase \"Spinning 18:00\" (18:00 a 18:50) que se cruza con ese horario."` o `"El entrenador ya tiene asignada la sesión personal #42 (18:00 a 19:00) que se cruza con ese horario."` |
+
+### 4. Contrato y dependencia pendiente de H07 (`BE-7.2`)
+
+- **Dependencia externa (`BE-4.3` / H04, Danilo):** `MembershipEligibilityService` resuelve `MEMBERSHIP_STATUS_SERVICE` en tiempo de ejecución mediante `ModuleRef`. Mientras `MembershipsModule` no registre el proveedor real:
+  - `POST /api/v1/classes/:classId/reservations` **falla de forma cerrada con HTTP 503 (`Service Unavailable`)** sin permitir reservas sin validar membresía.
+  - Cuando H04 registre `MEMBERSHIP_STATUS_SERVICE`, aceptará únicamente `MONTHLY` o `QUARTERLY` con `status === 'ACTIVE'`, rechazando con HTTP `403` las membresías no activas (`"Necesitas una membresía activa para reservar."`) y `DROP_IN` (`"La clase suelta se compra en recepción y no permite reservar."`).
+- **Índice único parcial (`DB-7.1`):** `class_reservations_confirmed_member_class_key` garantiza unicidad en `(class_id, member_id)` solo cuando `status = 'CONFIRMED'`, impidiendo reservas confirmadas duplicadas y permitiendo volver a reservar tras cancelar (`CANCELLED`).
+- **Concurrencia (`BE-7.2`):** `ClassReservationRepository.reserve` ejecuta `SELECT id FROM gym_classes WHERE id = $1 FOR UPDATE` antes de contar reservas `CONFIRMED` y crear la nueva fila; al agotarse el cupo responde `409` con `{ statusCode: 409, code: 'CLASS_FULL', message: 'La clase está llena.' }`.

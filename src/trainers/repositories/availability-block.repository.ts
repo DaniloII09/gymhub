@@ -44,13 +44,13 @@ export class AvailabilityBlockRepository {
 
   async hasFutureScheduledSessions(blockId: string): Promise<boolean> {
     const now = new Date();
-    // Revisa la relación/tabla de sesiones según la estructura final de Prisma
-    const session = await (this.prisma as any).session?.findFirst({
+    const session = await this.prisma.personalSession.findFirst({
       where: {
         availabilityBlockId: blockId,
-        status: 'AGENDADA',
-        date: { gte: now },
+        status: 'SCHEDULED',
+        endsAt: { gt: now },
       },
+      select: { id: true },
     });
 
     return !!session;
