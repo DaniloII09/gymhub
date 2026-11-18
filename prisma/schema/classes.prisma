@@ -23,6 +23,7 @@ model GymClass {
   endsAt    DateTime    @map("ends_at")
   capacity  Int
   status    ClassStatus @default(SCHEDULED)
+  cancellationReason String? @map("cancellation_reason") @db.VarChar(200)
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -45,6 +46,7 @@ model ClassReservation {
   memberId    String            @map("member_id") @db.Uuid
   status      ReservationStatus @default(CONFIRMED)
   cancelledAt DateTime?         @map("cancelled_at")
+  cancelledByGym Boolean        @default(false) @map("cancelled_by_gym")
   createdAt   DateTime          @default(now()) @map("created_at")
   updatedAt   DateTime          @updatedAt @map("updated_at")
 

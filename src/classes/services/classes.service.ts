@@ -58,6 +58,29 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 export class ClassesService {
   constructor(private readonly classRepository: ClassRepository) {}
 
+  async cancel(
+    classId: number,
+    rawReason: string,
+  ): Promise<{ reservationsCancelled: number; noticesSent: number }> {
+    const reason = typeof rawReason === 'string' ? rawReason.trim() : '';
+    if (reason.length < 5 || reason.length > 200) {
+      throw new BadRequestException(
+        'El motivo debe tener entre 5 y 200 caracteres.',
+      );
+    }
+    try {
+      return await this.classRepository.cancel(classId, reason);
+    } catch (error) {
+      if (error instanceof ClassNotFoundError)
+        throw new NotFoundException(CLASS_NOT_FOUND_MESSAGE);
+      if (error instanceof ClassNotScheduledError)
+        throw new ConflictException(
+          'Solo se puede cancelar una clase futura y programada.',
+        );
+      throw error;
+    }
+  }
+
   async list(
     query?: ListClassesQueryDto,
     actor?: Pick<User, 'role'>,
@@ -79,7 +102,10 @@ export class ClassesService {
         );
       }
 
-      if (to.getTime() - from.getTime() > MAX_MEMBER_CLASSES_RANGE_DAYS * MS_PER_DAY) {
+      if (
+        to.getTime() - from.getTime() >
+        MAX_MEMBER_CLASSES_RANGE_DAYS * MS_PER_DAY
+      ) {
         throw new BadRequestException(MEMBER_RANGE_EXCEEDED_MESSAGE);
       }
 
@@ -248,4 +274,3 @@ export class ClassesService {
     return error;
   }
 }
-

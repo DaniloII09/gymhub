@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { NotificationsModule } from '@Notifications';
 import {
   ClassReservationsController,
   ClassesController,
@@ -15,6 +16,7 @@ import {
 
 // Épica 2 · Clases grupales. Dueño: Luis (H06, H07).
 @Module({
+  imports: [NotificationsModule],
   controllers: [ClassesController, ClassReservationsController],
   providers: [
     ClassesService,
@@ -31,4 +33,3 @@ import {
   ],
 })
 export class ClassesModule {}
-
