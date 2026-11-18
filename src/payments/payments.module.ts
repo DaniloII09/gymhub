@@ -4,6 +4,7 @@ import {
   ChargesController,
   MemberPaymentsController,
   PaymentsController,
+  PendingChargesController,
   ReceiptsController,
 } from '@Payments/controllers';
 import {
@@ -26,6 +27,8 @@ import {
     // H16: "Mis pagos" del miembro.
     MemberPaymentsController,
     PaymentsController,
+    // H17: pagos pendientes del administrador.
+    PendingChargesController,
     ReceiptsController,
   ],
   providers: [

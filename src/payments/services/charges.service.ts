@@ -7,12 +7,24 @@ import type {
   ChargesService as ChargesContract,
   CreateChargeInput,
 } from '@Common/contracts';
-import { ChargeRepository, type MemberOption } from '@Payments/repositories';
+import { paginate, type Paginated } from '@Common/pagination';
+import {
+  ChargeRepository,
+  type MemberOption,
+  type PendingChargeRow,
+  type PendingChargeType,
+} from '@Payments/repositories';
 import { InvalidChargeError } from '@Payments/errors';
 import type { Charge, ChargeStatus, Prisma } from '@PrismaClient';
+import { gymToday } from './gym-calendar.js';
 
 export const MEMBER_NOT_FOUND_MESSAGE = 'No encontramos ese miembro.';
 export const CONCEPT_MAX_LENGTH = 80;
+
+/** Listado de pendientes del administrador con el total adeudado (H17). */
+export interface PendingChargesResult extends Paginated<PendingChargeRow> {
+  totalOwed: number;
+}
 
 /**
  * Servicio de cobros (BE-15.1). Implementa el contrato CHARGES_SERVICE, que es
@@ -69,6 +81,25 @@ export class ChargesService implements ChargesContract {
    */
   listMine(memberId: string, status?: ChargeStatus): Promise<Charge[]> {
     return this.chargeRepository.findByMember(memberId, status);
+  }
+
+  /**
+   * GET /charges/pending (BE-17.1): cobros pendientes de todos los miembros,
+   * con días de atraso y el total adeudado de todo el filtro.
+   */
+  async listPending(
+    query: { type?: PendingChargeType; page: number; pageSize: number },
+    now: Date = new Date(),
+  ): Promise<PendingChargesResult> {
+    const { rows, total, totalOwed } = await this.chargeRepository.findPending(
+      { type: query.type, today: gymToday(now) },
+      query,
+    );
+    return {
+      ...paginate(rows, total, query),
+      // Montos de 2 decimales: se redondea para no arrastrar errores de coma flotante.
+      totalOwed: Math.round(totalOwed * 100) / 100,
+    };
   }
 
   /** GET /charges/member-search: miembros para la pantalla de cobro (FE-15.1). */

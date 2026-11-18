@@ -2,6 +2,7 @@
 
 **H15 (SCRUM-30): Registrar un pago en recepción.** Dueño: Jaime.
 **H16 (SCRUM-31): Pagar con tarjeta mi membresía o sesión personal.** Dueño: Jaime.
+**H17 (SCRUM-32): Consultar los pagos pendientes.** Dueño: Jaime.
 
 ## Endpoints
 
@@ -14,6 +15,7 @@
 | GET | `/api/v1/charges/me?status=PENDING` | Miembro | BE-16.1 |
 | GET | `/api/v1/receipts/me?page=1` | Miembro | BE-16.1 |
 | POST | `/api/v1/charges/{chargeId}/card-payment` | Miembro | BE-16.2 |
+| GET | `/api/v1/charges/pending?type=MEMBERSHIP&page=1` | Administrador | BE-17.1 |
 
 ## Contrato para otros módulos: `CHARGES_SERVICE`
 
@@ -81,6 +83,24 @@ CVV: solo se guardan los últimos 4 dígitos.
   `ModuleRef` (sin importar MembershipsModule, que ya importa PaymentsModule).
   Mientras H04 no registre el contrato, responde `null`.
 - `GET /receipts/me` ordena por `issuedAt` descendente, 20 por página.
+
+## Pagos pendientes (H17)
+
+`GET /charges/pending` lista los cobros `PENDING` de todos los miembros con
+`memberCode`, `fullName`, `concept`, `amount`, `dueDate` y `daysLate`, más
+`totalOwed`, `total`, `page` y `pageSize` (20 por defecto). Solo Administrador.
+
+- `daysLate` = hoy − `dueDate` en días, mínimo 0. "Hoy" es la fecha del
+  servidor en la zona del gimnasio (`America/El_Salvador`, ver
+  `gym-calendar.ts`), no `CURRENT_DATE` de Postgres, que puede estar en UTC.
+- Orden: de más a menos días de atraso y, con los mismos días, por nombre.
+  `daysLate` se calcula en la consulta para poder ordenar y paginar en la base.
+- `type` acepta `MEMBERSHIP` o `PERSONAL_SESSION`; otro valor responde 400.
+- `totalOwed` es un `SUM` con el mismo filtro sobre **todos** los cobros, no
+  sobre la página. La página y el total se leen en una transacción
+  `REPEATABLE READ`, así que siempre coinciden aunque alguien pague en ese
+  momento.
+- El seed agrega dos cobros vencidos (6 y 35 días) de Ana Gomez y Luis Martinez.
 
 ## Diagrama entidad-relación
 
