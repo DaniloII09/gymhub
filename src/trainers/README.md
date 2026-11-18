@@ -42,3 +42,10 @@ Todos los bloques recurrentes semanales (`weekday`, `startTime`, `endTime`) y fe
 
 - Unitarias: `src/trainers/services/trainer-calendar.spec.ts` y `src/trainers/services/personal-sessions.service.spec.ts`.
 - Integración y concurrencia PostgreSQL real: `test/personal-sessions.e2e-spec.ts`.
+# H12 / BE-12.1 — agenda y resultado del entrenador
+
+- `GET /api/v1/personal-sessions/trainer/me` exige JWT con rol `TRAINER`. Devuelve `data` ordenada por inicio, con miembro, horario, estado y estado del cobro. Incluye las próximas dos semanas y las últimas 24 horas para poder registrar el resultado de una sesión recién iniciada.
+- `PATCH /api/v1/personal-sessions/trainer/me/:sessionId/result` exige `{"outcome":"COMPLETED"}` o `{"outcome":"NO_SHOW"}`. El entrenador se obtiene del JWT; no se acepta otro `trainerId` en la petición.
+- El resultado solo se puede registrar desde el inicio y hasta 24 horas después. Una sesión ajena o inexistente devuelve `404`; una sesión fuera del plazo o ya registrada devuelve `409`. La transición es atómica y guarda `resultRecordedAt`.
+- Ambos resultados llevan `status = COMPLETED`; `outcome` distingue `COMPLETED` (Realizada) de `NO_SHOW` (No asistió). Así se conserva el contrato de estado de H11.
+- La migración agrega `outcome` y `result_recorded_at` a `personal_sessions`. El frontend del miembro puede leer ambos campos adicionales sin perder compatibilidad.
