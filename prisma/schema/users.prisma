@@ -57,6 +57,10 @@ model User {
   memberships     Membership[] @relation("MemberMemberships")
   soldMemberships Membership[] @relation("MembershipsSold")
 
+  // Épica 4 · Check-in (H13): ingresos de este miembro y los que registró.
+  checkIns           CheckIn[] @relation("MemberCheckIns")
+  registeredCheckIns CheckIn[] @relation("CheckInsRegistered")
+
   // Épica 9 · Notificaciones (H24): avisos que recibió este usuario.
   notifications Notification[]
   expiryNotices ExpiryNotice[]

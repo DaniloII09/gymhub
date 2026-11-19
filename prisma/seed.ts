@@ -261,6 +261,7 @@ async function main() {
 
   await seedPlans();
   await seedMemberships();
+  await seedCheckIns();
   await seedCharges();
   await seedGymClasses();
   await seedPersonalSessionPricing();
@@ -371,6 +372,50 @@ async function seedMemberships() {
     });
   }
   console.log('membresías de prueba: una Activa, una Vencida y una Pendiente de pago');
+}
+
+/**
+ * Ingresos de prueba (DB-13.1 / H13): 10 de la última semana, 2 de ellos
+ * excepciones de Ana Gomez, cuya membresía está vencida (H14). El estado
+ * guardado es la foto del momento del ingreso. Solo se crean si la tabla está
+ * vacía, así que correr el seed dos veces no los duplica.
+ */
+const CHECK_INS = [
+  { email: 'miembro@gymhub.test', daysAgo: 6, hour: 7, status: 'ACTIVE' },
+  { email: 'miembro@gymhub.test', daysAgo: 5, hour: 18, status: 'ACTIVE' },
+  { email: 'miembro@gymhub.test', daysAgo: 3, hour: 6, status: 'ACTIVE' },
+  { email: 'miembro@gymhub.test', daysAgo: 2, hour: 19, status: 'ACTIVE' },
+  { email: 'miembro@gymhub.test', daysAgo: 1, hour: 7, status: 'ACTIVE' },
+  { email: 'ana.gomez@gymhub.test', daysAgo: 6, hour: 17, status: 'EXPIRED', reason: 'Renueva el viernes; el gerente autorizó el ingreso.' },
+  { email: 'ana.gomez@gymhub.test', daysAgo: 4, hour: 17, status: 'EXPIRED', reason: 'Pagará la renovación al salir de la clase.' },
+  { email: 'luis.martinez@gymhub.test', daysAgo: 5, hour: 8, status: 'NONE' },
+  { email: 'luis.martinez@gymhub.test', daysAgo: 2, hour: 8, status: 'NONE' },
+  { email: 'luis.martinez@gymhub.test', daysAgo: 1, hour: 20, status: 'NONE' },
+] as const;
+
+async function seedCheckIns() {
+  if ((await prisma.checkIn.count()) > 0) return;
+  const reception = await prisma.user.findUniqueOrThrow({ where: { email: 'recepcion@gymhub.test' } });
+  const today = gymTodayIso();
+
+  for (const c of CHECK_INS) {
+    const member = await prisma.user.findUniqueOrThrow({ where: { email: c.email } });
+    const day = gymDate(today, -c.daysAgo).toISOString().slice(0, 10);
+    // Hora local de El Salvador (UTC−6).
+    const checkedInAt = new Date(`${day}T${String(c.hour).padStart(2, '0')}:15:00.000-06:00`);
+    const reason = 'reason' in c ? c.reason : null;
+    await prisma.checkIn.create({
+      data: {
+        memberId: member.id,
+        checkedInAt,
+        membershipStatus: c.status,
+        isException: reason !== null,
+        exceptionReason: reason,
+        registeredById: reception.id,
+      },
+    });
+  }
+  console.log(`${CHECK_INS.length} ingresos de prueba de la última semana (2 excepciones)`);
 }
 
 async function seedCharges() {
