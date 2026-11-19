@@ -11,6 +11,7 @@ import {
   type ChargeStatus,
   type PersonalSession,
   type PersonalSessionStatus,
+  type PersonalSessionOutcome,
 } from '@PrismaClient';
 
 const UNIQUE_CONSTRAINT_VIOLATION = 'P2002';
@@ -35,6 +36,11 @@ export interface BookPersonalSessionData {
 
 export type PersonalSessionWithDetails = PersonalSession & {
   trainer: TrainerSummary;
+  chargeStatus: ChargeStatus | null;
+};
+
+export type TrainerSessionWithDetails = PersonalSession & {
+  member: { id: string; fullName: string; email: string };
   chargeStatus: ChargeStatus | null;
 };
 
@@ -292,5 +298,60 @@ export class PersonalSessionRepository {
           ? (chargeStatusMap.get(session.chargeId) ?? null)
           : null,
     }));
+  }
+
+  async findUpcomingForTrainer(
+    trainerId: string,
+    from: Date,
+    to: Date,
+  ): Promise<TrainerSessionWithDetails[]> {
+    const sessions = await this.prisma.personalSession.findMany({
+      where: { trainerId, startsAt: { gte: from, lt: to }, status: { in: ['SCHEDULED', 'COMPLETED'] } },
+      include: { member: { select: { id: true, fullName: true, email: true } } },
+      orderBy: [{ startsAt: 'asc' }, { id: 'asc' }],
+    });
+    const chargeIds = sessions.map((item) => item.chargeId).filter((id): id is number => id !== null);
+    const charges = chargeIds.length > 0
+      ? await this.prisma.charge.findMany({ where: { id: { in: chargeIds } }, select: { id: true, status: true } })
+      : [];
+    const statusByCharge = new Map(charges.map((charge) => [charge.id, charge.status]));
+    return sessions.map((session) => ({
+      ...session,
+      chargeStatus: session.chargeId !== null ? statusByCharge.get(session.chargeId) ?? null : null,
+    }));
+  }
+
+  async markTrainerResult(
+    sessionId: number,
+    trainerId: string,
+    outcome: PersonalSessionOutcome,
+    now: Date,
+  ): Promise<TrainerSessionWithDetails | 'NOT_FOUND' | 'INVALID_WINDOW'> {
+    return this.prisma.$transaction(async (tx) => {
+      const owned = await tx.personalSession.findFirst({
+        where: { id: sessionId, trainerId },
+        include: { member: { select: { id: true, fullName: true, email: true } } },
+      });
+      if (!owned) return 'NOT_FOUND';
+      if (owned.status !== 'SCHEDULED' || owned.startsAt > now ||
+          now.getTime() - owned.startsAt.getTime() > 24 * 60 * 60 * 1000) {
+        return 'INVALID_WINDOW';
+      }
+      const changed = await tx.personalSession.updateMany({
+        where: { id: sessionId, trainerId, status: 'SCHEDULED' },
+        data: { status: 'COMPLETED', outcome, resultRecordedAt: now },
+      });
+      if (changed.count !== 1) return 'INVALID_WINDOW';
+      const charge = owned.chargeId !== null
+        ? await tx.charge.findUnique({ where: { id: owned.chargeId }, select: { status: true } })
+        : null;
+      return {
+        ...owned,
+        status: 'COMPLETED',
+        outcome,
+        resultRecordedAt: now,
+        chargeStatus: charge?.status ?? null,
+      };
+    });
   }
 }
