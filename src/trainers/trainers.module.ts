@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { PaymentsModule } from '@Payments';
+import { AuthModule } from '@Auth';
 import {
+  AvailabilityBlocksController,
   PersonalSessionsController,
   TrainersController,
 } from '@Trainers/controllers';
@@ -16,11 +18,9 @@ import {
 
 // Épica 3 · Agenda de entrenadores (H10 disponibilidad y H11 sesiones personales).
 // Se reutilizan AvailabilityBlockRepository y AvailabilityBlocksService de H10.
-// AvailabilityBlocksController aún requiere importar AuthModule y ajustar
-// @CurrentUser en su rama de origen, por lo que aquí no se monta ni reescribe.
 @Module({
-  imports: [PaymentsModule],
-  controllers: [TrainersController, PersonalSessionsController],
+  imports: [PaymentsModule, AuthModule],
+  controllers: [TrainersController, PersonalSessionsController, AvailabilityBlocksController],
   providers: [
     AvailabilityBlockRepository,
     AvailabilityBlocksService,
