@@ -2,3 +2,34 @@
 // Agregá acá los modelos de tu módulo en tu feat branch. Si referencian a
 // User, agregá la relación opuesta en users.prisma (revisión de Danilo).
 // IDs: Int autoincrement para el dominio; los usuarios usan UUID.
+
+enum PlanType {
+  MONTHLY
+  QUARTERLY
+  DROP_IN
+}
+
+/// Plan que vende el gimnasio (H03). Restricciones que Prisma no representa y
+/// que van a mano en la migración DB-3.1:
+///   - CHECK price > 0.
+///   - CHECK durationDays entre 1 y 365, salvo DROP_IN, que va sin duración.
+///   - Índice único sobre lower(name): el nombre no se repite aunque cambien
+///     las mayúsculas.
+///   - Índice único parcial: un solo plan DROP_IN activo a la vez.
+/// Borrado lógico con isActive: desactivar no toca las membresías vendidas.
+model Plan {
+  id           Int      @id @default(autoincrement())
+  name         String   @unique @db.VarChar(40)
+  type         PlanType
+  /// Vacío en DROP_IN: la clase suelta vence el mismo día.
+  durationDays Int?     @map("duration_days")
+  price        Decimal  @db.Decimal(8, 2)
+  benefits     String?  @db.VarChar(300)
+  isActive     Boolean  @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([isActive])
+  @@map("plans")
+}

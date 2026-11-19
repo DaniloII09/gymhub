@@ -176,6 +176,35 @@ const NOTIFICATIONS = [
   },
 ] as const;
 
+/**
+ * Planes iniciales (DB-3.1 / H03): Mensual de 30 días a $25.00, Trimestral de
+ * 90 días a $65.00 y Clase suelta a $5.00, que va sin duración. Se identifican
+ * por nombre, que es único.
+ */
+const PLANS = [
+  {
+    name: 'Mensual',
+    type: 'MONTHLY',
+    durationDays: 30,
+    price: '25.00',
+    benefits: 'Acceso ilimitado al área de pesas y cardio, y reserva de clases grupales.',
+  },
+  {
+    name: 'Trimestral',
+    type: 'QUARTERLY',
+    durationDays: 90,
+    price: '65.00',
+    benefits: 'Todo lo del plan Mensual con un ahorro de $10.00 por trimestre.',
+  },
+  {
+    name: 'Clase suelta',
+    type: 'DROP_IN',
+    durationDays: null,
+    price: '5.00',
+    benefits: 'Una clase grupal del mismo día; se paga en recepción al momento.',
+  },
+] as const;
+
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
@@ -230,10 +259,23 @@ async function main() {
   }
   console.log(`${MACHINES.length} máquinas en el inventario`);
 
+  await seedPlans();
   await seedCharges();
   await seedGymClasses();
   await seedPersonalSessionPricing();
   await seedNotifications();
+}
+
+async function seedPlans() {
+  for (const plan of PLANS) {
+    // `update: {}` no pisa un plan que el administrador ya editó o desactivó.
+    await prisma.plan.upsert({
+      where: { name: plan.name },
+      update: {},
+      create: plan,
+    });
+  }
+  console.log(`${PLANS.length} planes iniciales (Mensual, Trimestral y Clase suelta)`);
 }
 
 async function seedCharges() {
