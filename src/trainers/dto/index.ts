@@ -7,3 +7,4 @@ export * from './create-personal-session.dto.js';
 export * from './list-my-sessions-query.dto.js';
 export * from './personal-session-response.dto.js';
 export * from './session-pricing.dto.js';
+export * from './trainer-session.dto.js';

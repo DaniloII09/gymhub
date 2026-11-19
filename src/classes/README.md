@@ -202,3 +202,12 @@ El repositorio actual (`gymhub`) contiene la API backend; a continuación se doc
   - Cuando H04 registre `MEMBERSHIP_STATUS_SERVICE`, aceptará únicamente `MONTHLY` o `QUARTERLY` con `status === 'ACTIVE'`, rechazando con HTTP `403` las membresías no activas (`"Necesitas una membresía activa para reservar."`) y `DROP_IN` (`"La clase suelta se compra en recepción y no permite reservar."`).
 - **Índice único parcial (`DB-7.1`):** `class_reservations_confirmed_member_class_key` garantiza unicidad en `(class_id, member_id)` solo cuando `status = 'CONFIRMED'`, impidiendo reservas confirmadas duplicadas y permitiendo volver a reservar tras cancelar (`CANCELLED`).
 - **Concurrencia (`BE-7.2`):** `ClassReservationRepository.reserve` ejecuta `SELECT id FROM gym_classes WHERE id = $1 FOR UPDATE` antes de contar reservas `CONFIRMED` y crear la nueva fila; al agotarse el cupo responde `409` con `{ statusCode: 409, code: 'CLASS_FULL', message: 'La clase está llena.' }`.
+
+### 5. Cancelar mi reserva — H08 / BE-8.1
+
+- `GET /api/v1/classes/reservations/me` ya existe desde H07 y ordena las reservas por fecha de clase.
+- `PATCH /api/v1/classes/reservations/:reservationId/cancel` requiere JWT con rol `MEMBER`, no recibe `memberId` en el cuerpo y retorna `200` con `ClassReservationResponseDto` actualizado. El `status` pasa a `CANCELLED`, `cancelledAt` queda registrado y `spotsLeft` refleja el cupo liberado.
+- Con una reserva inexistente, ya cancelada o de otro miembro retorna `404`, sin revelar a quién pertenece.
+- Con menos de 2 horas hasta el inicio retorna `409` y `"Solo puedes cancelar hasta 2 horas antes de la clase."`; exactamente 2 horas sí permite cancelar.
+- Las reservas con `origin = DROP_IN` retornan `403` y `"La clase suelta no se puede cancelar."`. La migración agrega `origin` con valor inicial `MEMBERSHIP` para las reservas existentes. H07 solo crea reservas de membresía; cualquier futura venta de clase suelta debe registrar explícitamente `DROP_IN`.
+- La cancelación bloquea la fila de la clase durante la transacción, igual que la creación de reservas, para evitar carreras en el conteo de cupos.

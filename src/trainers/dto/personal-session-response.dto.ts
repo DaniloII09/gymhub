@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ChargeStatus, PersonalSessionStatus } from '@PrismaClient';
+import { ChargeStatus, PersonalSessionOutcome, PersonalSessionStatus } from '@PrismaClient';
 import type { PersonalSessionWithDetails } from '@Trainers/repositories';
 import { TrainerSummaryDto } from './trainer-summary.dto.js';
 
@@ -47,6 +47,12 @@ export class PersonalSessionResponseDto {
   })
   status!: PersonalSessionStatus;
 
+  @ApiPropertyOptional({ enum: PersonalSessionOutcome, nullable: true })
+  outcome!: PersonalSessionOutcome | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  resultRecordedAt!: Date | null;
+
   @ApiProperty({ example: '2026-11-18T05:00:00.000Z' })
   createdAt!: Date;
 
@@ -69,6 +75,8 @@ export class PersonalSessionResponseDto {
       chargeId: entity.chargeId,
       chargeStatus: entity.chargeStatus,
       status: entity.status,
+      outcome: entity.outcome,
+      resultRecordedAt: entity.resultRecordedAt,
       createdAt: entity.createdAt,
     };
   }

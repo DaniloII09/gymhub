@@ -38,6 +38,7 @@ const sampleReservation = (): ClassReservationWithClass => ({
   classId: 1,
   memberId: MEMBER_ID,
   status: 'CONFIRMED',
+  origin: 'MEMBERSHIP',
   cancelledAt: null,
   createdAt: new Date('2026-11-18T05:00:00Z'),
   updatedAt: new Date('2026-11-18T05:00:00Z'),
@@ -168,6 +169,7 @@ describe('ClassReservationsService', () => {
   let repository: {
     reserve: ReturnType<typeof vi.fn>;
     findByMember: ReturnType<typeof vi.fn>;
+    cancelMine: ReturnType<typeof vi.fn>;
   };
   let membershipEligibility: {
     assertCanReserve: ReturnType<typeof vi.fn>;
@@ -178,6 +180,7 @@ describe('ClassReservationsService', () => {
     repository = {
       reserve: vi.fn(),
       findByMember: vi.fn(),
+      cancelMine: vi.fn(),
     };
     membershipEligibility = {
       assertCanReserve: vi.fn().mockResolvedValue(undefined),
@@ -297,5 +300,26 @@ describe('ClassReservationsService', () => {
       new NotFoundException(CLASS_NOT_FOUND_MESSAGE),
     );
     expect(repository.reserve).not.toHaveBeenCalled();
+  });
+
+  it('devuelve la reserva cancelada y solo usa el miembro autenticado', async () => {
+    const cancelled = {
+      ...sampleReservation(),
+      status: 'CANCELLED' as const,
+      cancelledAt: new Date(),
+    };
+    repository.cancelMine.mockResolvedValue(cancelled);
+    await expect(service.cancelMine(10, MEMBER_ID)).resolves.toEqual(cancelled);
+    expect(repository.cancelMine).toHaveBeenCalledWith(10, MEMBER_ID);
+  });
+
+  it.each([
+    ['NOT_FOUND', NotFoundException, 'La reserva no existe.'],
+    ['TOO_LATE', ConflictException, 'Solo puedes cancelar hasta 2 horas antes de la clase.'],
+    ['DROP_IN', ForbiddenException, 'La clase suelta no se puede cancelar.'],
+  ] as const)('mapea %s al error HTTP esperado', async (result, HttpError, message) => {
+    repository.cancelMine.mockResolvedValue(result);
+    await expect(service.cancelMine(10, MEMBER_ID)).rejects.toThrow(HttpError);
+    await expect(service.cancelMine(10, MEMBER_ID)).rejects.toThrow(message);
   });
 });

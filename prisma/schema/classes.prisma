@@ -12,6 +12,11 @@ enum ReservationStatus {
   CANCELLED
 }
 
+enum ReservationOrigin {
+  MEMBERSHIP
+  DROP_IN
+}
+
 /// Clase grupal programada por el administrador (H06).
 /// El cupo debe estar entre 1 y 50, y endsAt debe ser mayor que startsAt
 /// (restricciones CHECK en la migración DB-6.1).
@@ -45,6 +50,7 @@ model ClassReservation {
   classId     Int               @map("class_id")
   memberId    String            @map("member_id") @db.Uuid
   status      ReservationStatus @default(CONFIRMED)
+  origin      ReservationOrigin @default(MEMBERSHIP)
   cancelledAt DateTime?         @map("cancelled_at")
   cancelledByGym Boolean        @default(false) @map("cancelled_by_gym")
   createdAt   DateTime          @default(now()) @map("created_at")

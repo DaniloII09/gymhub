@@ -163,4 +163,46 @@ export class ClassReservationRepository {
       },
     }));
   }
+
+  /** Cancela únicamente una reserva propia y confirmada, bajo bloqueo de la clase. */
+  async cancelMine(
+    reservationId: number,
+    memberId: string,
+    now: Date = new Date(),
+  ): Promise<ClassReservationWithClass | 'NOT_FOUND' | 'TOO_LATE' | 'DROP_IN'> {
+    return this.prisma.$transaction(
+      async (tx) => {
+        const owned = await tx.classReservation.findFirst({
+          where: { id: reservationId, memberId, status: 'CONFIRMED' },
+          select: { classId: true },
+        });
+        if (!owned) return 'NOT_FOUND';
+
+        await tx.$queryRaw`
+          SELECT id FROM gym_classes WHERE id = ${owned.classId} FOR UPDATE`;
+        const reservation = await tx.classReservation.findFirst({
+          where: { id: reservationId, memberId, status: 'CONFIRMED' },
+          include: { gymClass: { include: WITH_TRAINER } },
+        });
+        if (!reservation) return 'NOT_FOUND';
+        if (reservation.origin === 'DROP_IN') return 'DROP_IN';
+        if (reservation.gymClass.startsAt.getTime() - now.getTime() < 2 * 60 * 60 * 1000) {
+          return 'TOO_LATE';
+        }
+
+        const cancelled = await tx.classReservation.update({
+          where: { id: reservationId },
+          data: { status: 'CANCELLED', cancelledAt: now },
+        });
+        const confirmedReservations = await tx.classReservation.count({
+          where: { classId: owned.classId, status: 'CONFIRMED' },
+        });
+        return {
+          ...cancelled,
+          gymClass: { ...reservation.gymClass, confirmedReservations },
+        };
+      },
+      { timeout: RESERVATION_TRANSACTION_TIMEOUT_MS },
+    );
+  }
 }

@@ -4,6 +4,9 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Param,
+  ParseIntPipe,
+  Patch,
   Post,
   Put,
   Query,
@@ -25,9 +28,12 @@ import { CurrentUser, Roles } from '@Auth/decorators';
 import {
   CreatePersonalSessionDto,
   ListMySessionsQueryDto,
+  MarkTrainerResultDto,
   PersonalSessionListDto,
   PersonalSessionResponseDto,
   SessionPricingResponseDto,
+  TrainerSessionListDto,
+  TrainerSessionResponseDto,
   UpdateSessionPricingDto,
 } from '@Trainers/dto';
 import {
@@ -59,6 +65,30 @@ export class PersonalSessionsController {
   @ApiOkResponse({ type: SessionPricingResponseDto })
   getPricing(): Promise<SessionPricingResponseDto> {
     return this.pricingService.getPricingStatus();
+  }
+
+  @Roles('TRAINER')
+  @Get('trainer/me')
+  @ApiOperation({ summary: 'Agenda del entrenador autenticado para los próximos 14 días (H12)' })
+  @ApiOkResponse({ type: TrainerSessionListDto })
+  async listTrainerAgenda(@CurrentUser() user: User): Promise<TrainerSessionListDto> {
+    const items = await this.sessionsService.listTrainerAgenda(user.id);
+    return { data: items.map((item) => TrainerSessionResponseDto.fromEntity(item)) };
+  }
+
+  @Roles('TRAINER')
+  @Patch('trainer/me/:sessionId/result')
+  @ApiOperation({ summary: 'Registra Realizada o No asistió dentro de 24 horas del inicio (H12)' })
+  @ApiOkResponse({ type: TrainerSessionResponseDto })
+  @ApiNotFoundResponse({ description: 'Sesión inexistente o de otro entrenador.' })
+  @ApiConflictResponse({ description: 'La sesión aún no inició o inició hace más de 24 horas.' })
+  async markTrainerResult(
+    @Param('sessionId', ParseIntPipe) sessionId: number,
+    @Body() dto: MarkTrainerResultDto,
+    @CurrentUser() user: User,
+  ): Promise<TrainerSessionResponseDto> {
+    const updated = await this.sessionsService.markTrainerResult(sessionId, user.id, dto.outcome);
+    return TrainerSessionResponseDto.fromEntity(updated);
   }
 
   @Roles('ADMIN')

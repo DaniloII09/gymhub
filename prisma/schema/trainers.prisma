@@ -9,6 +9,11 @@ enum PersonalSessionStatus {
   COMPLETED
 }
 
+enum PersonalSessionOutcome {
+  COMPLETED
+  NO_SHOW
+}
+
 /// Sesión personal de entrenamiento agendada con un entrenador (DB-11.1 / H06-H11).
 /// endsAt debe ser mayor que startsAt y price > 0 (restricciones CHECK en la migración).
 /// Un índice único parcial en PostgreSQL impide dos sesiones SCHEDULED del mismo
@@ -23,6 +28,8 @@ model PersonalSession {
   price               Decimal?              @db.Decimal(8, 2)
   chargeId            Int?                  @unique @map("charge_id")
   status              PersonalSessionStatus @default(SCHEDULED)
+  outcome             PersonalSessionOutcome?
+  resultRecordedAt    DateTime?             @map("result_recorded_at")
   createdAt           DateTime              @default(now()) @map("created_at")
   updatedAt           DateTime              @updatedAt @map("updated_at")
 

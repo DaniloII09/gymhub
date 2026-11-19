@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { ScheduleModule } from '@nestjs/schedule';
 import { AuthModule } from '@Auth';
 import { JwtAuthGuard, PasswordChangeGuard, RolesGuard } from '@Auth/guards';
 import { HealthModule } from '@Health';
@@ -28,6 +29,8 @@ import { ReportsModule } from '@Reports';
       // Si falta DATABASE_URL o JWT_SECRET, la app no arranca.
       validate: validateEnv,
     }),
+    // Tareas programadas (H26: avisos de vencimiento a las 07:00).
+    ScheduleModule.forRoot(),
     PrismaModule,
     HealthModule,
     UsersModule,

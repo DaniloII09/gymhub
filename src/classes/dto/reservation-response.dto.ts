@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ClassStatus, ReservationStatus } from '@PrismaClient';
+import { ClassStatus, ReservationOrigin, ReservationStatus } from '@PrismaClient';
 import type { ClassReservationWithClass } from '@Classes/repositories';
 import { ClassTrainerSummaryDto } from './class-response.dto.js';
 
@@ -51,6 +51,9 @@ export class ClassReservationResponseDto {
   })
   status!: ReservationStatus;
 
+  @ApiProperty({ enum: ReservationOrigin, example: ReservationOrigin.MEMBERSHIP })
+  origin!: ReservationOrigin;
+
   @ApiPropertyOptional({ example: null, nullable: true })
   cancelledAt!: Date | null;
 
@@ -74,6 +77,7 @@ export class ClassReservationResponseDto {
       classId: entity.classId,
       memberId: entity.memberId,
       status: entity.status,
+      origin: entity.origin,
       cancelledAt: entity.cancelledAt,
       cancelledByGym: entity.cancelledByGym,
       createdAt: entity.createdAt,

@@ -18,9 +18,10 @@ import {
 import {
   PersonalSessionRepository,
   type PersonalSessionWithDetails,
+  type TrainerSessionWithDetails,
   type TrainerSummary,
 } from '@Trainers/repositories';
-import type { PersonalSessionStatus } from '@PrismaClient';
+import type { PersonalSessionOutcome, PersonalSessionStatus } from '@PrismaClient';
 import { AvailabilityBlocksService } from './availability-blocks.service.js';
 import { SessionPricingService } from './session-pricing.service.js';
 import {
@@ -194,6 +195,34 @@ export class PersonalSessionsService {
     status?: PersonalSessionStatus,
   ): Promise<PersonalSessionWithDetails[]> {
     return this.repository.findByMember(memberId, status);
+  }
+
+  listTrainerAgenda(
+    trainerId: string,
+    now: Date = new Date(),
+  ): Promise<TrainerSessionWithDetails[]> {
+    return this.repository.findUpcomingForTrainer(
+      trainerId,
+      new Date(now.getTime() - MS_PER_DAY),
+      new Date(now.getTime() + 14 * MS_PER_DAY),
+    );
+  }
+
+  async markTrainerResult(
+    sessionId: number,
+    trainerId: string,
+    outcome: PersonalSessionOutcome,
+    now: Date = new Date(),
+  ): Promise<TrainerSessionWithDetails> {
+    if (!Number.isInteger(sessionId) || sessionId < 1 || sessionId > 2_147_483_647) {
+      throw new NotFoundException('La sesión no existe.');
+    }
+    const result = await this.repository.markTrainerResult(sessionId, trainerId, outcome, now);
+    if (result === 'NOT_FOUND') throw new NotFoundException('La sesión no existe.');
+    if (result === 'INVALID_WINDOW') {
+      throw new ConflictException('Solo puedes marcar el resultado desde el inicio de la sesión y hasta 24 horas después.');
+    }
+    return result;
   }
 
   private async requireActiveTrainer(

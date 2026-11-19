@@ -48,6 +48,8 @@ function createMocks() {
   const upsertDbPrice = vi.fn().mockResolvedValue(20);
   const book = vi.fn();
   const findByMember = vi.fn().mockResolvedValue([]);
+  const findUpcomingForTrainer = vi.fn().mockResolvedValue([]);
+  const markTrainerResult = vi.fn();
 
   const repository = {
     findActiveTrainers,
@@ -57,6 +59,8 @@ function createMocks() {
     upsertDbPrice,
     book,
     findByMember,
+    findUpcomingForTrainer,
+    markTrainerResult,
   } as unknown as PersonalSessionRepository;
 
   const findAllByTrainer = vi.fn().mockResolvedValue([
@@ -93,6 +97,8 @@ function createMocks() {
       findScheduledConflictsForTrainer,
       book,
       findByMember,
+      findUpcomingForTrainer,
+      markTrainerResult,
       findAllByTrainer,
       requireConfiguredPrice,
       getConfiguredDbPrice,
@@ -368,5 +374,35 @@ describe('PersonalSessionsService (H11)', () => {
       });
       expect(upsertDbPrice).toHaveBeenCalledWith(30, 'admin-1');
     });
+  });
+});
+
+describe('PersonalSessionsService (H12)', () => {
+  it('consulta la agenda del entrenador y conserva las 24h recientes para marcar resultados', async () => {
+    const { service, mocks } = createMocks();
+    const now = new Date('2026-11-18T12:00:00.000Z');
+    await service.listTrainerAgenda(TRAINER_ID, now);
+    expect(mocks.findUpcomingForTrainer).toHaveBeenCalledWith(
+      TRAINER_ID,
+      new Date('2026-11-17T12:00:00.000Z'),
+      new Date('2026-12-02T12:00:00.000Z'),
+    );
+  });
+
+  it('oculta sesiones ajenas y rechaza marcar antes o después de la ventana', async () => {
+    const { service, mocks } = createMocks();
+    mocks.markTrainerResult.mockResolvedValueOnce('NOT_FOUND');
+    await expect(service.markTrainerResult(10, TRAINER_ID, 'COMPLETED')).rejects.toThrow(NotFoundException);
+    mocks.markTrainerResult.mockResolvedValueOnce('INVALID_WINDOW');
+    await expect(service.markTrainerResult(10, TRAINER_ID, 'NO_SHOW')).rejects.toThrow(ConflictException);
+  });
+
+  it('registra el resultado con identidad de entrenador y hora de cambio', async () => {
+    const { service, mocks } = createMocks();
+    const now = new Date('2026-11-18T12:00:00.000Z');
+    const updated = { id: 10, status: 'COMPLETED', outcome: 'NO_SHOW', resultRecordedAt: now };
+    mocks.markTrainerResult.mockResolvedValueOnce(updated);
+    await expect(service.markTrainerResult(10, TRAINER_ID, 'NO_SHOW', now)).resolves.toBe(updated);
+    expect(mocks.markTrainerResult).toHaveBeenCalledWith(10, TRAINER_ID, 'NO_SHOW', now);
   });
 });

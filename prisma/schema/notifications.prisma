@@ -37,3 +37,29 @@ model Notification {
   @@index([userId, readAt])
   @@map("notifications")
 }
+
+/// Qué aviso de vencimiento se envió (H26): 5 días antes o 1 día antes.
+enum ExpiryNoticeKind {
+  D5
+  D1
+}
+
+/// Registro de avisos de vencimiento ya enviados (DB-26.1). La restricción
+/// única (membresía, tipo) impide que la tarea diaria mande dos veces el mismo
+/// aviso aunque corra más de una vez el mismo día.
+model ExpiryNotice {
+  id           Int              @id @default(autoincrement())
+  /// Membresía avisada (H04). La relación se agrega cuando exista Membership,
+  /// igual que en Payment.
+  membershipId Int              @map("membership_id")
+  memberId     String           @map("member_id") @db.Uuid
+  kind         ExpiryNoticeKind
+  /// Fecha de vencimiento avisada (fecha del gimnasio).
+  endDate      DateTime         @map("end_date") @db.Date
+  sentAt       DateTime         @default(now()) @map("sent_at")
+
+  member User @relation(fields: [memberId], references: [id], onDelete: Restrict)
+
+  @@unique([membershipId, kind])
+  @@map("expiry_notices")
+}

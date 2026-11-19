@@ -28,6 +28,8 @@ export const CLASS_FULL_MESSAGE = 'La clase está llena.';
 export const ALREADY_RESERVED_MESSAGE = 'Ya tienes una reserva en esta clase.';
 export const RESERVATION_NOT_SCHEDULED_MESSAGE =
   'Solo puedes reservar en una clase programada.';
+export const RESERVATION_CANCEL_TOO_LATE_MESSAGE =
+  'Solo puedes cancelar hasta 2 horas antes de la clase.';
 
 const MAX_CLASS_ID = 2_147_483_647;
 
@@ -62,6 +64,29 @@ export class ClassReservationsService {
     status?: ReservationStatus,
   ): Promise<ClassReservationWithClass[]> {
     return this.reservationRepository.findByMember(memberId, status);
+  }
+
+  async cancelMine(
+    reservationId: number,
+    memberId: string,
+  ): Promise<ClassReservationWithClass> {
+    if (reservationId < 1 || reservationId > MAX_CLASS_ID) {
+      throw new NotFoundException('La reserva no existe.');
+    }
+    const result = await this.reservationRepository.cancelMine(
+      reservationId,
+      memberId,
+    );
+    if (result === 'NOT_FOUND') {
+      throw new NotFoundException('La reserva no existe.');
+    }
+    if (result === 'TOO_LATE') {
+      throw new ConflictException(RESERVATION_CANCEL_TOO_LATE_MESSAGE);
+    }
+    if (result === 'DROP_IN') {
+      throw new ForbiddenException('La clase suelta no se puede cancelar.');
+    }
+    return result;
   }
 
   private mapDomainError(error: unknown): unknown {
