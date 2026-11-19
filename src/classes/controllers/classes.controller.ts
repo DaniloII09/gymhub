@@ -24,6 +24,8 @@ import {
 import { CurrentUser, Roles } from '@Auth/decorators';
 import {
   ClassResponseDto,
+  CancelClassDto,
+  CancelClassResponseDto,
   CreateClassDto,
   ListClassesQueryDto,
   UpdateClassDto,
@@ -41,6 +43,25 @@ import type { User } from '@PrismaClient';
 @Controller('classes')
 export class ClassesController {
   constructor(private readonly classesService: ClassesService) {}
+
+  @Roles('ADMIN')
+  @Patch(':classId/cancel')
+  @ApiOperation({
+    summary:
+      'Cancela una clase futura, sus reservas y avisa a los miembros (H09)',
+  })
+  @ApiOkResponse({ type: CancelClassResponseDto })
+  @ApiBadRequestResponse({
+    description: 'El motivo debe tener entre 5 y 200 caracteres.',
+  })
+  @ApiNotFoundResponse({ description: 'La clase no existe.' })
+  @ApiConflictResponse({ description: 'La clase ya inició o está cancelada.' })
+  async cancel(
+    @Param('classId', ParseIntPipe) classId: number,
+    @Body() dto: CancelClassDto,
+  ): Promise<CancelClassResponseDto> {
+    return this.classesService.cancel(classId, dto.reason);
+  }
 
   @Get()
   @ApiOperation({
@@ -135,4 +156,3 @@ export class ClassesController {
     return ClassResponseDto.fromEntity(updated);
   }
 }
-

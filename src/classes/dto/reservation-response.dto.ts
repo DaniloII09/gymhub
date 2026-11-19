@@ -45,7 +45,10 @@ export class ClassReservationResponseDto {
   @ApiProperty({ example: '22222222-2222-4222-8222-222222222222' })
   memberId!: string;
 
-  @ApiProperty({ enum: ReservationStatus, example: ReservationStatus.CONFIRMED })
+  @ApiProperty({
+    enum: ReservationStatus,
+    example: ReservationStatus.CONFIRMED,
+  })
   status!: ReservationStatus;
 
   @ApiProperty({ enum: ReservationOrigin, example: ReservationOrigin.MEMBERSHIP })
@@ -53,6 +56,12 @@ export class ClassReservationResponseDto {
 
   @ApiPropertyOptional({ example: null, nullable: true })
   cancelledAt!: Date | null;
+
+  @ApiProperty({
+    example: false,
+    description: 'La reserva fue cancelada por el gimnasio.',
+  })
+  cancelledByGym!: boolean;
 
   @ApiProperty({ example: '2026-11-18T05:00:00.000Z' })
   createdAt!: Date;
@@ -70,6 +79,7 @@ export class ClassReservationResponseDto {
       status: entity.status,
       origin: entity.origin,
       cancelledAt: entity.cancelledAt,
+      cancelledByGym: entity.cancelledByGym,
       createdAt: entity.createdAt,
       gymClass: {
         id: entity.gymClass.id,

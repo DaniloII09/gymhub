@@ -1,5 +1,11 @@
 # Épica 2 · Clases grupales
 
+## H09 / SCRUM-24: cancelar una clase (PR apilado sobre H27)
+
+`PATCH /api/v1/classes/{classId}/cancel` requiere `ADMIN` y body `{ "reason": "..." }` de 5 a 200 caracteres tras recortar espacios. Devuelve `{ "reservationsCancelled": 14, "noticesSent": 14 }`. Una clase iniciada o ya cancelada responde 409; una inexistente, 404. La fila `gym_classes` se bloquea, H27 crea los avisos para las reservas aún confirmadas, se cancelan esas reservas con `cancelledByGym=true` y se marca la clase `CANCELLED` con `cancellationReason`. Todo ocurre en una transacción; un fallo de avisos revierte la cancelación. El calendario del miembro solo incluye clases `SCHEDULED`, mientras el administrador ve también las canceladas.
+
+La migración `20261118090000_cancel_gym_class` agrega `cancellation_reason` y `cancelled_by_gym`. H09 depende del contrato H27 en PR #21; tras integrar ese PR, actualizar esta rama contra `develop` para retirar los commits ajenos del diff. Pruebas unitarias de orden, rechazo y fallo de avisos en `class-cancellation.spec.ts`. La prueba de migración y el escenario real transaccional en PostgreSQL siguen pendientes de ambiente y QA (SCRUM-88).
+
 **H06 (SCRUM-21): Programar las clases grupales.**
 **H07 (SCRUM-22): Reservar un cupo en una clase.** Dueño: Luis Guzmán.
 
