@@ -66,6 +66,99 @@ se revierte, no queda ningún aviso.
 
 Los textos se guardan sin los espacios del principio y del final.
 
+## Aviso de clase cancelada para H09: `CLASS_CANCELLATION_NOTIFIER` (BE-27.1)
+
+H09 (cancelar una clase) no arma el aviso: inyecta este contrato y lo llama
+**dentro de su transacción y antes de cambiar las reservas**, porque se avisa a
+las reservas que en ese momento siguen confirmadas.
+
+```ts
+// En ClassesModule: imports: [NotificationsModule]
+import {
+  CLASS_CANCELLATION_NOTIFIER,
+  type ClassCancellationNotifier,
+} from '@Common/contracts';
+
+constructor(
+  @Inject(CLASS_CANCELLATION_NOTIFIER)
+  private readonly cancellationNotices: ClassCancellationNotifier,
+) {}
+
+await this.prisma.$transaction(async (tx) => {
+  await this.cancellationNotices.notifyClassCancelled(
+    { classId, reason }, // el motivo ya validado de 5 a 200 caracteres
+    tx,
+  );
+  // ...pasar la clase a CANCELLED y sus reservas a "Cancelada por el gimnasio"
+});
+```
+
+- Avisa solo a los miembros activos con reserva `CONFIRMED`. Quien canceló su
+  reserva o no tenía reserva no recibe nada.
+- Título "Clase cancelada" y mensaje "La clase {nombre} del {dd/mm/aaaa} a las
+  {hh:mm} fue cancelada. Motivo: {motivo}.", con la fecha y hora de
+  `America/El_Salvador`. Si nombre y motivo no caben en 300 caracteres, el
+  motivo se recorta con "…".
+- `referenceId` es `class:{id}` y el módulo de origen es `CLASSES`.
+- Devuelve cuántos avisos creó; con 0 reservas confirmadas devuelve 0 sin error.
+- Si la clase no existe lanza `ClassNotFoundForNoticeError`. Si la transacción
+  de H09 se revierte, no queda ningún aviso.
+
+## Avisos de vencimiento de membresía (H26: DB-26.1 y BE-26.1)
+
+Una tarea diaria (`ExpiryNoticesJob`, con `@nestjs/schedule`) corre **todos los
+días a las 07:00 de El Salvador** y avisa a los miembros cuya membresía Mensual
+o Trimestral vence:
+
+- **en 5 días** (aviso `D5`): "Tu membresía {plan} vence en 5 días, el
+  {dd/mm/aaaa}. Renuévala en recepción o desde Mis pagos.";
+- **mañana** (aviso `D1`): "Tu membresía {plan} vence mañana, el {dd/mm/aaaa}. ...".
+
+Los dos usan el título "Tu membresía vence pronto", el módulo de origen
+`MEMBERSHIPS` y `referenceId` `membership:{id}`.
+
+- **No avisa** por la clase suelta (`DROP_IN`) ni a quien ya renovó.
+- **No repite**: cada aviso se registra en `expiry_notices` con restricción
+  única `(membership_id, kind)`, en la misma transacción que el aviso. Si la
+  tarea corre dos veces el mismo día, la segunda no envía nada.
+- Un miembro que el servicio central rechaza (por ejemplo, inactivo) se salta
+  sin detener a los demás.
+- Para probar sin esperar a las 07:00, el administrador puede correrla con
+  `POST /api/v1/notifications/expiry-notices/run`, que devuelve
+  `{ date, sent: { D5, D1 }, sourceAvailable }`.
+
+### Para H04 (Danilo): `MEMBERSHIP_EXPIRY_SOURCE`
+
+La tarea no lee la tabla de membresías: pide los datos a Membresías con el
+contrato `MEMBERSHIP_EXPIRY_SOURCE` (`@Common/contracts`). Mientras H04 no lo
+registre, la tarea corre sin enviar nada y responde `sourceAvailable: false`.
+
+```ts
+// En MembershipsModule
+{ provide: MEMBERSHIP_EXPIRY_SOURCE, useClass: MembershipExpirySourceImpl }
+
+// expiringOn('2026-11-23') devuelve las membresías pagadas que vencen ese día:
+// { membershipId, memberId, planName, planType, endDate, renewed }
+// renewed = true si el miembro ya tiene registrada la membresía siguiente.
+```
+
+### Tabla `expiry_notices` (DB-26.1)
+
+| Columna         | Tipo                    | Notas                                                  |
+| --------------- | ----------------------- | ------------------------------------------------------ |
+| `id`            | `serial`                |                                                        |
+| `membership_id` | `integer`               | La relación se agrega cuando exista `Membership` (H04) |
+| `member_id`     | `uuid`                  | FK a `users`                                           |
+| `kind`          | enum `ExpiryNoticeKind` | `D5` o `D1`                                            |
+| `end_date`      | `date`                  | Vencimiento avisado                                    |
+| `sent_at`       | `timestamp`             |                                                        |
+
+Restricción única `(membership_id, kind)`. Para revertir la migración:
+
+```bash
+npx prisma db execute --file prisma/migrations/20261118050000_add_expiry_notices/down.sql
+```
+
 ### Módulos de origen (`NotificationSource`)
 
 | Valor         | Módulo                                              |
@@ -123,7 +216,14 @@ El seed carga 3 avisos de prueba para `miembro@gymhub.test`, uno de ellos leído
 
 - Unitarias: `src/notifications/services/notifications.service.spec.ts`.
 - Unitarias de la bandeja: `src/notifications/services/notification-inbox.service.spec.ts`.
+- Unitarias del aviso de clase cancelada: `src/notifications/services/class-cancellation-notices.service.spec.ts`.
 - Integración contra la base real: `test/notifications.e2e-spec.ts` (30
   destinatarios en una llamada, transacción revertida, validaciones y enum) y
   `test/notifications-inbox.e2e-spec.ts` (orden y paginación, privacidad,
   contador, marcar uno y todos, 401, 403 y 404).
+  `test/class-cancellation-notices.e2e-spec.ts` cubre H27: 14 reservas
+  confirmadas y 2 canceladas por el miembro generan 14 avisos, y si la
+  transacción se revierte no queda ninguno.
+- H26: `src/notifications/services/expiry-notices.service.spec.ts` (unitarias) y
+  `test/expiry-notices.e2e-spec.ts` (D5 y D1 sin repetir, renovada y clase
+  suelta sin aviso, restricción única, reversión de la migración y 403).
