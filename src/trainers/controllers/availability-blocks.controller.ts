@@ -12,7 +12,7 @@ import { AvailabilityBlocksService } from '../services/availability-blocks.servi
 import { CreateAvailabilityBlockDto } from '../dto/create-availability-block.dto.js';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator.js';
 import { Roles } from '../../auth/decorators/roles.decorator.js';
-import { User } from '@prisma/client';
+import type { User } from '@PrismaClient';
 
 @Controller('availability-blocks')
 @Roles('TRAINER')
