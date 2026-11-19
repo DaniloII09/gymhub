@@ -24,6 +24,11 @@ export class MembersService {
    * con rol MEMBER marcada para cambio obligatorio. El código sale de la
    * secuencia, así que dos inscripciones simultáneas reciben códigos distintos.
    */
+  /** Búsqueda de miembros para vender (H04) o registrar ingresos (H13). */
+  search(term: string): Promise<User[]> {
+    return this.userRepository.searchMembers(term);
+  }
+
   async enroll(
     dto: CreateMemberDto,
     createdById: string,
