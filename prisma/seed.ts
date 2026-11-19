@@ -260,6 +260,7 @@ async function main() {
   console.log(`${MACHINES.length} máquinas en el inventario`);
 
   await seedPlans();
+  await seedMemberships();
   await seedCharges();
   await seedGymClasses();
   await seedPersonalSessionPricing();
@@ -276,6 +277,100 @@ async function seedPlans() {
     });
   }
   console.log(`${PLANS.length} planes iniciales (Mensual, Trimestral y Clase suelta)`);
+}
+
+/** Fecha de hoy (AAAA-MM-DD) en la zona del gimnasio, como en Pagos. */
+function gymTodayIso(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/El_Salvador',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
+
+/** Fecha solo-día (columna @db.Date) a `days` días de una fecha AAAA-MM-DD. */
+function gymDate(from: string, days: number): Date {
+  const date = new Date(`${from}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date;
+}
+
+/**
+ * Membresías de prueba (DB-4.1 / H04), una por estado, cada una con su cobro:
+ *   - Juan Perez: Mensual Activa, inició hace 10 días y su cobro está pagado.
+ *   - Ana Gomez: Mensual Vencida hace 11 días (cobro pagado).
+ *   - Luis Martinez: Trimestral Pendiente de pago desde hoy.
+ * El cobro pagado lleva su pago y su comprobante, igual que PaymentRepository.
+ * Solo se crea si el miembro aún no tiene membresías: correr el seed dos veces
+ * no las duplica.
+ */
+const MEMBERSHIPS = [
+  { email: 'miembro@gymhub.test', plan: 'Mensual', startsInDays: -10, paid: true, status: 'ACTIVE' },
+  { email: 'ana.gomez@gymhub.test', plan: 'Mensual', startsInDays: -40, paid: true, status: 'EXPIRED' },
+  { email: 'luis.martinez@gymhub.test', plan: 'Trimestral', startsInDays: 0, paid: false, status: 'PENDING_PAYMENT' },
+] as const;
+
+async function seedMemberships() {
+  const today = gymTodayIso();
+  const seller = await prisma.user.findUniqueOrThrow({ where: { email: 'recepcion@gymhub.test' } });
+
+  for (const m of MEMBERSHIPS) {
+    const member = await prisma.user.findUniqueOrThrow({ where: { email: m.email } });
+    if ((await prisma.membership.count({ where: { memberId: member.id } })) > 0) continue;
+
+    const plan = await prisma.plan.findUniqueOrThrow({ where: { name: m.plan } });
+    const startDate = gymDate(today, m.startsInDays);
+    // endDate = startDate + durationDays − 1 (último día con acceso).
+    const endDate = gymDate(today, m.startsInDays + (plan.durationDays ?? 1) - 1);
+
+    await prisma.$transaction(async (tx) => {
+      const membership = await tx.membership.create({
+        data: {
+          memberId: member.id,
+          planId: plan.id,
+          planType: plan.type,
+          startDate,
+          endDate,
+          status: m.status,
+          createdById: seller.id,
+        },
+      });
+      const charge = await tx.charge.create({
+        data: {
+          memberId: member.id,
+          type: 'MEMBERSHIP',
+          concept: `Membresía ${plan.name}`,
+          amount: plan.price,
+          dueDate: startDate,
+          membershipId: membership.id,
+          ...(m.paid ? { status: 'PAID', paidAt: startDate } : {}),
+        },
+      });
+      if (!m.paid) return;
+
+      const payment = await tx.payment.create({
+        data: {
+          chargeId: charge.id,
+          method: 'CASH',
+          result: 'APPROVED',
+          idempotencyKey: crypto.randomUUID(),
+          registeredById: seller.id,
+        },
+      });
+      const [{ next }] = await tx.$queryRaw<{ next: bigint }[]>`
+        SELECT nextval(pg_get_serial_sequence('receipts', 'id')) AS next`;
+      await tx.receipt.create({
+        data: {
+          id: Number(next),
+          number: `C-${String(next).padStart(6, '0')}`,
+          paymentId: payment.id,
+          chargeId: charge.id,
+        },
+      });
+    });
+  }
+  console.log('membresías de prueba: una Activa, una Vencida y una Pendiente de pago');
 }
 
 async function seedCharges() {
