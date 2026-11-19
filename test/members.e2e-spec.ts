@@ -81,4 +81,43 @@ describe('Members (e2e)', () => {
     const res = await request(app.getHttpServer()).post('/api/v1/members').send(member());
     expect(res.status).toBe(401);
   });
+
+  describe('GET /members?q= (búsqueda para H04)', () => {
+    const search = (q: string, token = receptionToken) =>
+      request(app.getHttpServer())
+        .get('/api/v1/members')
+        .query({ q })
+        .set('Authorization', `Bearer ${token}`);
+
+    it('encuentra por código exacto sin distinguir mayúsculas', async () => {
+      const res = await search('gym-000001');
+      expect(res.status).toBe(200);
+      expect(res.body.data).toEqual([
+        expect.objectContaining({ memberCode: 'GYM-000001', fullName: 'Juan Perez' }),
+      ]);
+    });
+
+    it('encuentra por parte del nombre y solo devuelve miembros', async () => {
+      const res = await search('gome');
+      expect(res.status).toBe(200);
+      expect(res.body.data.map((m: { fullName: string }) => m.fullName)).toContain('Ana Gomez');
+
+      const staff = await search('Demo');
+      expect(staff.body.data).toEqual([]);
+    });
+
+    it('devuelve como máximo 10 resultados', async () => {
+      const res = await search('Pedro Test');
+      expect(res.status).toBe(200);
+      expect(res.body.data.length).toBeLessThanOrEqual(10);
+    });
+
+    it('400 con menos de 2 caracteres y 403 si busca un miembro', async () => {
+      expect((await search(' a ')).status).toBe(400);
+      const login = await request(app.getHttpServer())
+        .post('/api/v1/auth/login')
+        .send({ email: 'miembro@gymhub.test', password: 'Demo1234!' });
+      expect((await search('Juan', login.body.accessToken)).status).toBe(403);
+    });
+  });
 });

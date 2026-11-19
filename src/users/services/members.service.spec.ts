@@ -18,6 +18,7 @@ function build() {
   const userRepository = {
     nextMemberCode: vi.fn().mockResolvedValue('GYM-000004'),
     createMember: vi.fn(),
+    searchMembers: vi.fn().mockResolvedValue([]),
   };
   const configService = { get: vi.fn().mockReturnValue(4) }; // saltRounds bajo = test rápido
   const service = new MembersService(
@@ -66,6 +67,12 @@ describe('MembersService', () => {
     expect(storedHash).toMatch(/^\$2[aby]\$/);
     expect(storedHash).not.toContain(temporaryPassword);
     await expect(bcrypt.compare(temporaryPassword, storedHash)).resolves.toBe(true);
+  });
+
+  it('busca miembros con el término recibido', async () => {
+    const { service, userRepository } = build();
+    await service.search('GYM-000001');
+    expect(userRepository.searchMembers).toHaveBeenCalledWith('GYM-000001');
   });
 
   it('traduce el correo repetido a 409', async () => {

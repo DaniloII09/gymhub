@@ -15,6 +15,7 @@ import {
   ChargeAlreadyPaidError,
   ChargeNotFoundError,
   IdempotencyKeyReusedError,
+  InvalidCardError,
 } from '@Payments/errors';
 import type {
   ApprovedPayment,
@@ -248,6 +249,62 @@ describe('PaymentsService', () => {
         service.payCardAsMember(MEMBER_ID, 2_147_483_648, cardPayment),
       ).rejects.toThrow(NotFoundException);
       expect(repository.pay).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('payInTransaction (contrato PAYMENTS_SERVICE, H04)', () => {
+    const TX = 'tx' as never;
+    const input = {
+      chargeId: 7,
+      method: 'CASH' as const,
+      idempotencyKey: KEY,
+      registeredById: RECEPTION_ID,
+    };
+
+    beforeEach(() => {
+      (repository as unknown as { payInTransaction: ReturnType<typeof vi.fn> }).payInTransaction =
+        vi.fn().mockImplementation(async (_tx, data: PayChargeData) => {
+          const authorization = await data.authorize(5);
+          return authorization.result === 'DECLINED'
+            ? { kind: 'DECLINED', declineReason: authorization.declineReason }
+            : { kind: 'APPROVED', payment: { ...approved, chargeId: 7, amount: 5 } };
+        });
+    });
+
+    it('en efectivo aprueba sin pasar por la pasarela y devuelve el comprobante', async () => {
+      await expect(service.payInTransaction(input, TX)).resolves.toEqual({
+        kind: 'APPROVED',
+        receiptId: 3,
+        receiptNumber: 'C-000003',
+        amount: 5,
+      });
+      expect(gateway.charge).not.toHaveBeenCalled();
+    });
+
+    it('con tarjeta cobra el monto del cobro por la pasarela y devuelve el rechazo', async () => {
+      gateway.charge.mockResolvedValue({
+        result: 'DECLINED',
+        declineReason: 'Fondos insuficientes',
+        cardLast4: '0002',
+      });
+      await expect(
+        service.payInTransaction({ ...input, method: 'CARD', card: CARD }, TX),
+      ).resolves.toEqual({ kind: 'DECLINED', declineReason: 'Fondos insuficientes' });
+      expect(gateway.charge).toHaveBeenCalledWith(CARD, 5);
+    });
+
+    it('una tarjeta con datos no válidos vuelve como rechazo con el motivo', async () => {
+      gateway.charge.mockRejectedValue(new InvalidCardError('Tarjeta vencida'));
+      await expect(
+        service.payInTransaction({ ...input, method: 'CARD', card: CARD }, TX),
+      ).resolves.toEqual({ kind: 'DECLINED', declineReason: 'Tarjeta vencida' });
+    });
+
+    it('con tarjeta sin datos vuelve como rechazo', async () => {
+      await expect(service.payInTransaction({ ...input, method: 'CARD' }, TX)).resolves.toEqual({
+        kind: 'DECLINED',
+        declineReason: MISSING_CARD_MESSAGE,
+      });
     });
   });
 });
