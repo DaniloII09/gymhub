@@ -4,7 +4,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { MembershipStatus } from '@Common/contracts';
+import type {
+  MembershipStatus,
+  PayInTransactionInput,
+  PayInTransactionResult,
+  PaymentsService as PaymentsContract,
+} from '@Common/contracts';
+import type { Prisma } from '@PrismaClient';
 import {
   PaymentRepository,
   type ApprovedPayment,
@@ -44,12 +50,54 @@ export interface MemberCardPayment extends ApprovedPayment {
  * y traduce los errores de dominio a respuestas HTTP.
  */
 @Injectable()
-export class PaymentsService {
+export class PaymentsService implements PaymentsContract {
   constructor(
     private readonly paymentRepository: PaymentRepository,
     private readonly gateway: PaymentGatewayService,
     private readonly membershipStatus: MembershipStatusLookup,
   ) {}
+
+  /**
+   * Contrato PAYMENTS_SERVICE: paga un cobro dentro de la transacción de otro
+   * módulo (H04, clase suelta), con las mismas reglas que POST /payments.
+   * Una tarjeta rechazada o con datos no válidos vuelve como DECLINED con el
+   * motivo; los demás errores de dominio se propagan.
+   */
+  async payInTransaction(
+    input: PayInTransactionInput,
+    tx: Prisma.TransactionClient,
+  ): Promise<PayInTransactionResult> {
+    const { card } = input;
+    const authorize = async (amount: number): Promise<Authorization> => {
+      if (input.method === 'CASH') {
+        return { result: 'APPROVED', declineReason: null, cardLast4: null };
+      }
+      if (!card) throw new InvalidCardError(MISSING_CARD_MESSAGE);
+      return this.gateway.charge(card, amount);
+    };
+
+    try {
+      const outcome = await this.paymentRepository.payInTransaction(tx, {
+        chargeId: input.chargeId,
+        method: input.method,
+        idempotencyKey: input.idempotencyKey,
+        registeredById: input.registeredById,
+        authorize,
+      });
+      if (outcome.kind === 'DECLINED') return outcome;
+      return {
+        kind: 'APPROVED',
+        receiptId: outcome.payment.receiptId,
+        receiptNumber: outcome.payment.receiptNumber,
+        amount: outcome.payment.amount,
+      };
+    } catch (error) {
+      if (error instanceof InvalidCardError) {
+        return { kind: 'DECLINED', declineReason: error.message };
+      }
+      throw error;
+    }
+  }
 
   /**
    * POST /payments (H15): Recepción o Administrador cobran en efectivo o con

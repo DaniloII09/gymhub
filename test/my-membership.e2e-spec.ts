@@ -20,9 +20,9 @@ import {
  * Prueba de integración de H05 ("Mi membresía") contra la base de datos real.
  *
  * Requiere Postgres levantado, las migraciones aplicadas y el seed corrido.
- * El estado de membresía lo calcula H04 (BE-4.3), que aún no existe: aquí se
- * registra un MEMBERSHIP_STATUS_SERVICE de prueba para comprobar lo que H05
- * hace con cada estado. Sin él, el endpoint debe responder 503.
+ * El estado de membresía lo calcula H04 (BE-4.3). La primera suite reemplaza
+ * MEMBERSHIP_STATUS_SERVICE por uno de prueba para comprobar lo que H05 hace
+ * con cada estado; la segunda usa el servicio real contra la base.
  */
 const PASSWORD = 'Demo1234!';
 const ACTIVE_EMAIL = 'miembro@gymhub.test';
@@ -55,12 +55,18 @@ const fakeStatusService: MembershipStatusService = {
 })
 class FakeMembershipStatusModule {}
 
-async function createApp(withStatusService: boolean) {
-  const moduleRef = await Test.createTestingModule({
-    imports: withStatusService
+async function createApp(withFakeStatusService: boolean) {
+  const builder = Test.createTestingModule({
+    imports: withFakeStatusService
       ? [AppModule, FakeMembershipStatusModule]
       : [AppModule],
-  }).compile();
+  });
+  // H04 ya registra el servicio real en MembershipsModule: se reemplaza para
+  // que ModuleRef encuentre siempre el de prueba.
+  const moduleRef = await (withFakeStatusService
+    ? builder.overrideProvider(MEMBERSHIP_STATUS_SERVICE).useValue(fakeStatusService)
+    : builder
+  ).compile();
 
   const app = moduleRef.createNestApplication<INestApplication<App>>();
   // Igual que main.ts.
@@ -181,25 +187,94 @@ describe('Mi membresía · H05 (e2e)', () => {
   });
 });
 
-describe('Mi membresía · H05 sin el servicio de H04 (e2e)', () => {
+describe('Mi membresía · H05 con el estado real de H04 (e2e)', () => {
+  const EMAIL_PREFIX = 'e2e.h05.real.';
   let app: INestApplication<App>;
+  let prisma: PrismaService;
+
+  /** Miembro nuevo, sin membresías; se borra al terminar. */
+  async function createMember(): Promise<{ id: string; email: string }> {
+    const email = `${EMAIL_PREFIX}${Date.now()}.${Math.random().toString(36).slice(2, 8)}@gymhub.test`;
+    const passwordHash = (await prisma.user.findUniqueOrThrow({ where: { email: ACTIVE_EMAIL } }))
+      .passwordHash;
+    const user = await prisma.user.create({
+      data: { email, fullName: 'Miembro H05', role: 'MEMBER', passwordHash },
+    });
+    return { id: user.id, email };
+  }
+
+  const gymToday = () =>
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/El_Salvador',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+  const dbDate = (iso: string, plusDays = 0) => {
+    const d = new Date(`${iso}T00:00:00.000Z`);
+    d.setUTCDate(d.getUTCDate() + plusDays);
+    return d;
+  };
 
   beforeAll(async () => {
     app = await createApp(false);
+    prisma = app.get(PrismaService);
   });
 
   afterAll(async () => {
+    const where = { member: { email: { startsWith: EMAIL_PREFIX } } };
+    await prisma.charge.deleteMany({ where });
+    await prisma.membership.deleteMany({ where });
+    await prisma.user.deleteMany({ where: { email: { startsWith: EMAIL_PREFIX } } });
     await app.close();
   });
 
-  it('responde 503 con un mensaje claro en vez de inventar un estado', async () => {
-    const token = await login(app, ACTIVE_EMAIL);
+  it('quien nunca tuvo membresía recibe NONE', async () => {
+    const member = await createMember();
     const res = await request(app.getHttpServer())
       .get('/api/v1/memberships/me')
-      .set('Authorization', `Bearer ${token}`)
-      .expect(503);
-    expect(res.body.message).toBe(
-      'La consulta de membresías todavía no está disponible.',
-    );
+      .set('Authorization', `Bearer ${await login(app, member.email)}`)
+      .expect(200);
+    expect(res.body).toMatchObject({ status: 'NONE', planName: null, endDate: null });
+  });
+
+  it('una Mensual pagada que inicia hoy se ve ACTIVE, vence en 29 días y la fecha no se corre de día', async () => {
+    const member = await createMember();
+    const today = gymToday();
+    const plan = await prisma.plan.findUniqueOrThrow({ where: { name: 'Mensual' } });
+    const membership = await prisma.membership.create({
+      data: {
+        memberId: member.id,
+        planId: plan.id,
+        planType: 'MONTHLY',
+        startDate: dbDate(today),
+        endDate: dbDate(today, 29),
+        createdById: member.id,
+      },
+    });
+    await prisma.charge.create({
+      data: {
+        memberId: member.id,
+        type: 'MEMBERSHIP',
+        concept: 'Membresía Mensual',
+        amount: plan.price,
+        dueDate: dbDate(today),
+        membershipId: membership.id,
+        status: 'PAID',
+        paidAt: new Date(),
+      },
+    });
+
+    const res = await request(app.getHttpServer())
+      .get('/api/v1/memberships/me')
+      .set('Authorization', `Bearer ${await login(app, member.email)}`)
+      .expect(200);
+    expect(res.body).toMatchObject({
+      status: 'ACTIVE',
+      planName: 'Mensual',
+      planType: 'MONTHLY',
+      endDate: dbDate(today, 29).toISOString().slice(0, 10),
+      daysLeft: 29,
+    });
   });
 });

@@ -49,8 +49,8 @@ enum ExpiryNoticeKind {
 /// aviso aunque corra más de una vez el mismo día.
 model ExpiryNotice {
   id           Int              @id @default(autoincrement())
-  /// Membresía avisada (H04). La relación se agrega cuando exista Membership,
-  /// igual que en Payment.
+  /// Membresía avisada (H04). Sin llave foránea todavía: el e2e de H26 usa ids
+  /// de prueba (99000x) que no existen en `memberships`.
   membershipId Int              @map("membership_id")
   memberId     String           @map("member_id") @db.Uuid
   kind         ExpiryNoticeKind

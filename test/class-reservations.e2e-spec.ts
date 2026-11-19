@@ -16,9 +16,9 @@ import { AppModule } from './../src/app.module.js';
  * Pruebas de integración e2e para H07 (SCRUM-22): Reservar un cupo en una clase.
  *
  * Requiere PostgreSQL levantado, migraciones aplicadas y seed ejecutado.
- * - La primera suite levanta `AppModule` real (sin H04 registrado) para
- *   demostrar que el listado BE-7.1 funciona y que las reservas fallan de forma
- *   cerrada (HTTP 503) mientras BE-4.3 / H04 siga pendiente.
+ * - La primera suite levanta `AppModule` real, con el estado de membresía de
+ *   H04 (BE-4.3), para demostrar que el listado BE-7.1 funciona y que un
+ *   miembro sin membresía no puede reservar (HTTP 403).
  * - La segunda suite importa además un módulo DE PRUEBAS con una implementación
  *   controlada de `MEMBERSHIP_STATUS_SERVICE` para verificar contra PostgreSQL
  *   real las reglas de membresía, el índice único parcial (`CANCELLED` -> nueva
@@ -203,11 +203,11 @@ describe('Reservas de clases · H07 sin proveedor H04 (AppModule real)', () => {
       .expect(400);
   });
 
-  it('BE-7.2 (fail closed sin H04): sin MEMBERSHIP_STATUS_SERVICE registrado responde 503 y no crea reservas', async () => {
+  it('BE-7.2 con el estado real de H04: un miembro sin membresía responde 403 y no crea reservas', async () => {
     const { startsAt, endsAt } = futureClassWindow(4, 15, 60);
     const gymClass = await prisma.gymClass.create({
       data: {
-        name: `${CLASS_PREFIX} Sin H04`,
+        name: `${CLASS_PREFIX} Sin membresía`,
         trainerId,
         startsAt,
         endsAt,
@@ -215,11 +215,21 @@ describe('Reservas de clases · H07 sin proveedor H04 (AppModule real)', () => {
         status: 'SCHEDULED',
       },
     });
+    const email = `${MEMBER_EMAIL_PREFIX}sin.membresia.${randomUUID()}@gymhub.test`;
+    await prisma.user.create({
+      data: {
+        email,
+        fullName: 'Miembro sin membresía',
+        role: 'MEMBER',
+        passwordHash: await bcrypt.hash(PASSWORD, 4),
+      },
+    });
+    const noMembershipToken = await login(email);
 
     await request(app.getHttpServer())
       .post(`/api/v1/classes/${gymClass.id}/reservations`)
-      .set('Authorization', `Bearer ${memberToken}`)
-      .expect(503);
+      .set('Authorization', `Bearer ${noMembershipToken}`)
+      .expect(403);
 
     await expect(
       prisma.classReservation.count({ where: { classId: gymClass.id } }),

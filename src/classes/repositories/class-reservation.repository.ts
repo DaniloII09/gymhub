@@ -7,7 +7,12 @@ import {
   ClassNotFoundError,
   ClassNotScheduledError,
 } from '@Classes/errors';
-import { Prisma, type ClassReservation, type ReservationStatus } from '@PrismaClient';
+import {
+  Prisma,
+  type ClassReservation,
+  type ReservationOrigin,
+  type ReservationStatus,
+} from '@PrismaClient';
 import type { GymClassWithDetails } from './class.repository.js';
 
 const UNIQUE_CONSTRAINT_VIOLATION = 'P2002';
@@ -54,64 +59,7 @@ export class ClassReservationRepository {
   ): Promise<ClassReservationWithClass> {
     try {
       return await this.prisma.$transaction(
-        async (tx) => {
-          const locked = await tx.$queryRaw<{ id: number }[]>`
-            SELECT id FROM gym_classes WHERE id = ${classId} FOR UPDATE`;
-          if (locked.length === 0) {
-            throw new ClassNotFoundError(classId);
-          }
-
-          const gymClass = await tx.gymClass.findUniqueOrThrow({
-            where: { id: classId },
-            include: WITH_TRAINER,
-          });
-
-          if (gymClass.status !== 'SCHEDULED') {
-            throw new ClassNotScheduledError(classId);
-          }
-
-          if (gymClass.startsAt.getTime() <= now.getTime()) {
-            throw new ClassAlreadyStartedError(classId);
-          }
-
-          const existing = await tx.classReservation.findFirst({
-            where: {
-              classId,
-              memberId,
-              status: 'CONFIRMED',
-            },
-          });
-          if (existing) {
-            throw new AlreadyReservedError(classId, memberId);
-          }
-
-          const confirmed = await tx.classReservation.count({
-            where: {
-              classId,
-              status: 'CONFIRMED',
-            },
-          });
-
-          if (confirmed >= gymClass.capacity) {
-            throw new ClassFullError(classId);
-          }
-
-          const created = await tx.classReservation.create({
-            data: {
-              classId,
-              memberId,
-              status: 'CONFIRMED',
-            },
-          });
-
-          return {
-            ...created,
-            gymClass: {
-              ...gymClass,
-              confirmedReservations: confirmed + 1,
-            },
-          };
-        },
+        (tx) => this.reserveInTransaction(tx, classId, memberId, { now }),
         { timeout: RESERVATION_TRANSACTION_TIMEOUT_MS },
       );
     } catch (error) {
@@ -123,6 +71,83 @@ export class ClassReservationRepository {
       }
       throw error;
     }
+  }
+
+  /**
+   * Las mismas validaciones y el mismo bloqueo que `reserve`, dentro de la
+   * transacción de quien llama. Lo usa H04 para la clase suelta (origen
+   * DROP_IN): el cupo se ocupa en la misma transacción que el cobro, así que
+   * nunca se cobra una clase sin cupo ni se ocupa un cupo sin pago.
+   *
+   * Si choca con el índice único parcial, el P2002 se propaga y la
+   * transacción de quien llama falla completa.
+   *
+   * @throws los mismos errores de dominio que `reserve`.
+   */
+  async reserveInTransaction(
+    tx: Prisma.TransactionClient,
+    classId: number,
+    memberId: string,
+    options: { now?: Date; origin?: ReservationOrigin } = {},
+  ): Promise<ClassReservationWithClass> {
+    const now = options.now ?? new Date();
+    const locked = await tx.$queryRaw<{ id: number }[]>`
+      SELECT id FROM gym_classes WHERE id = ${classId} FOR UPDATE`;
+    if (locked.length === 0) {
+      throw new ClassNotFoundError(classId);
+    }
+
+    const gymClass = await tx.gymClass.findUniqueOrThrow({
+      where: { id: classId },
+      include: WITH_TRAINER,
+    });
+
+    if (gymClass.status !== 'SCHEDULED') {
+      throw new ClassNotScheduledError(classId);
+    }
+
+    if (gymClass.startsAt.getTime() <= now.getTime()) {
+      throw new ClassAlreadyStartedError(classId);
+    }
+
+    const existing = await tx.classReservation.findFirst({
+      where: {
+        classId,
+        memberId,
+        status: 'CONFIRMED',
+      },
+    });
+    if (existing) {
+      throw new AlreadyReservedError(classId, memberId);
+    }
+
+    const confirmed = await tx.classReservation.count({
+      where: {
+        classId,
+        status: 'CONFIRMED',
+      },
+    });
+
+    if (confirmed >= gymClass.capacity) {
+      throw new ClassFullError(classId);
+    }
+
+    const created = await tx.classReservation.create({
+      data: {
+        classId,
+        memberId,
+        status: 'CONFIRMED',
+        origin: options.origin ?? 'MEMBERSHIP',
+      },
+    });
+
+    return {
+      ...created,
+      gymClass: {
+        ...gymClass,
+        confirmedReservations: confirmed + 1,
+      },
+    };
   }
 
   /**

@@ -39,6 +39,27 @@ await this.prisma.$transaction(async (tx) => {
 Si la transacción de quien llama se revierte, el cobro tampoco queda. Un monto
 de 0 o negativo lanza `InvalidChargeError`.
 
+## Contrato para otros módulos: `PAYMENTS_SERVICE`
+
+Paga un cobro **dentro de la transacción de quien llama**, con las mismas reglas
+que `POST /payments`: bloquea el cobro, toma el monto del cobro guardado, pasa la
+tarjeta por la pasarela, emite el comprobante y deja el cobro `PAID`. Lo agregó
+H04 para la clase suelta, donde el cupo, la membresía, la reserva, el cobro y el
+pago se guardan juntos o no se guarda nada.
+
+```ts
+const result = await this.payments.payInTransaction(
+  { chargeId, method: 'CARD', card, idempotencyKey, registeredById },
+  tx,
+);
+// { kind: 'APPROVED', receiptId, receiptNumber, amount }
+// | { kind: 'DECLINED', declineReason }
+```
+
+Una tarjeta rechazada o con datos no válidos vuelve como `DECLINED` con el
+motivo; quien llama decide si revierte su transacción (y con ella el intento).
+Reutiliza `PaymentRepository.payInTransaction`, la misma lógica de `pay`.
+
 ## Pasarela de pago simulada (BE-15.3)
 
 `PaymentGatewayService.charge(tarjeta, monto)` valida los datos, espera 2

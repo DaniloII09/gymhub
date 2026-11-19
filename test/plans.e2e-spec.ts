@@ -2,7 +2,10 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { AppModule } from '../src/app.module.js';
+import { PrismaService } from '@Prisma/services';
 
+/** Marcador de los planes que crea esta prueba; se borran al terminar. */
+const E2E_PLAN_MARK = '[e2e]';
 const ADMIN = { email: 'admin@gymhub.test', password: 'Demo1234!' };
 const MEMBER = { email: 'miembro@gymhub.test', password: 'Demo1234!' };
 
@@ -14,9 +17,10 @@ describe('Plans (e2e)', () => {
   const api = () => request(app.getHttpServer());
   const asAdmin = (req: request.Test) => req.set('Authorization', `Bearer ${adminToken}`);
 
-  // Nombre único por corrida (máx. 40): las pruebas no chocan con datos previos.
+  // Nombre único por corrida (máx. 40), con un marcador para borrarlos al
+  // terminar: si quedan activos, ensucian la venta de membresías (H04).
   const uniqueName = (prefix: string) =>
-    `${prefix} ${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+    `${E2E_PLAN_MARK} ${prefix} ${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
 
   const monthly = (overrides: object = {}) => ({
     name: uniqueName('Mensual'),
@@ -40,6 +44,10 @@ describe('Plans (e2e)', () => {
   });
 
   afterAll(async () => {
+    // Algunas pruebas pasan el nombre a mayúsculas: se borra sin distinguirlas.
+    await app.get(PrismaService).plan.deleteMany({
+      where: { name: { startsWith: E2E_PLAN_MARK, mode: 'insensitive' } },
+    });
     await app.close();
   });
 
@@ -143,7 +151,7 @@ describe('Plans (e2e)', () => {
         asAdmin(api().post('/api/v1/plans').send(payload)),
         asAdmin(api().post('/api/v1/plans').send({ ...payload, name: payload.name.toLowerCase() })),
       ]);
-      expect(results.map((r) => r.status).sort()).toEqual([201, 409]);
+      expect(results.map((r) => r.status).sort((a, b) => a - b)).toEqual([201, 409]);
     });
   });
 

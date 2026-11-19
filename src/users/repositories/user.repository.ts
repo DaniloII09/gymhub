@@ -124,6 +124,25 @@ export class UserRepository {
     `;
     return `GYM-${String(rows[0].nextval).padStart(6, '0')}`;
   }
+
+  /**
+   * Miembros activos por código exacto o parte del nombre, sin distinguir
+   * mayúsculas (H04 y H13). Máximo `limit`, ordenados por nombre.
+   */
+  searchMembers(term: string, limit = 10): Promise<User[]> {
+    return this.prisma.user.findMany({
+      where: {
+        role: 'MEMBER',
+        isActive: true,
+        OR: [
+          { memberCode: { equals: term, mode: 'insensitive' } },
+          { fullName: { contains: term, mode: 'insensitive' } },
+        ],
+      },
+      orderBy: { fullName: 'asc' },
+      take: limit,
+    });
+  }
   /**
    * Cambia la contraseña y apaga mustChangePassword, revocando todas las
    * sesiones del usuario, en una sola transacción. Toca refresh_tokens a

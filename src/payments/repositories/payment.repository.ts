@@ -92,7 +92,7 @@ export class PaymentRepository {
   async pay(data: PayChargeData): Promise<PaymentOutcome> {
     try {
       return await this.prisma.$transaction(
-        (tx) => this.payInTransaction(tx, data),
+        (tx) => this.payWithin(tx, data),
         { timeout: PAY_TRANSACTION_TIMEOUT_MS },
       );
     } catch (error) {
@@ -113,7 +113,16 @@ export class PaymentRepository {
     }
   }
 
-  private async payInTransaction(
+  /**
+   * Los mismos pasos que `pay`, pero dentro de la transacción de quien llama
+   * (contrato PAYMENTS_SERVICE, H04). No traduce los P2002: si la clave o el
+   * comprobante chocan, la transacción de quien llama falla completa.
+   */
+  payInTransaction(tx: Prisma.TransactionClient, data: PayChargeData): Promise<PaymentOutcome> {
+    return this.payWithin(tx, data);
+  }
+
+  private async payWithin(
     tx: Prisma.TransactionClient,
     data: PayChargeData,
   ): Promise<PaymentOutcome> {

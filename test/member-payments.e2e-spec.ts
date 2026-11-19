@@ -5,6 +5,7 @@ import request from 'supertest';
 import { AppModule } from './../src/app.module.js';
 import { PrismaService } from '@Prisma/services';
 import { PaymentGatewayService } from '@Payments/services';
+import { MEMBERSHIP_STATUS_SERVICE, type MembershipStatusService } from '@Common/contracts';
 
 /**
  * Prueba de integración de H16 (pago en línea del miembro) contra la base de
@@ -168,9 +169,13 @@ describe('Pagos · H16 mis pagos y pago en línea (e2e)', () => {
         amount: 30,
         paymentMethod: 'CARD',
         cardLast4: '4242',
-        // H04 todavía no registra el contrato de estado de membresía.
-        membershipStatus: null,
       });
+      // H04 registra el contrato de estado: el pago responde el estado actual
+      // de la membresía del miembro, el mismo que calcula BE-4.3.
+      const current = await app
+        .get<MembershipStatusService>(MEMBERSHIP_STATUS_SERVICE)
+        .currentFor(memberId);
+      expect(res.body.membershipStatus).toBe(current.status);
       expect(res.body.receiptNumber).toMatch(/^C-\d{6}$/);
 
       const saved = await prisma.charge.findUniqueOrThrow({

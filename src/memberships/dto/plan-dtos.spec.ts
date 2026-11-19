@@ -14,7 +14,7 @@ import {
 type DtoClass = typeof CreatePlanDto | typeof UpdatePlanDto | typeof ListPlansQueryDto;
 
 async function errorsOf(cls: DtoClass, body: object): Promise<Record<string, string[]>> {
-  const errors = await validate(plainToInstance(cls, body));
+  const errors = await validate(plainToInstance(cls as typeof CreatePlanDto, body));
   return Object.fromEntries(
     errors.map((error) => [error.property, Object.values(error.constraints ?? {})]),
   );

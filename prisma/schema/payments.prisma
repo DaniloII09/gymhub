@@ -36,15 +36,16 @@ model Charge {
   amount       Decimal      @db.Decimal(8, 2)
   dueDate      DateTime     @map("due_date") @db.Date
   status       ChargeStatus @default(PENDING)
-  /// Membresía que origina el cobro (H04). La relación se agrega cuando exista Membership.
+  /// Membresía que origina el cobro (H04). Una membresía tiene un solo cobro.
   membershipId Int?         @unique @map("membership_id")
   paidAt       DateTime?    @map("paid_at")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  member   User      @relation("ChargeMember", fields: [memberId], references: [id], onDelete: Restrict)
-  payments Payment[]
+  member     User        @relation("ChargeMember", fields: [memberId], references: [id], onDelete: Restrict)
+  membership Membership? @relation(fields: [membershipId], references: [id], onDelete: Restrict)
+  payments   Payment[]
   receipt  Receipt?
 
   @@index([memberId, status])

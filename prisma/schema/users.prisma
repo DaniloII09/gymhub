@@ -53,6 +53,10 @@ model User {
   memberPersonalSessions       PersonalSession[]        @relation("MemberPersonalSessions")
   updatedSessionPricingConfigs PersonalSessionPricing[] @relation("PersonalSessionPricingUpdatedBy")
 
+  // Épica 1 · Membresías (H04): membresías de este miembro y las que vendió.
+  memberships     Membership[] @relation("MemberMemberships")
+  soldMemberships Membership[] @relation("MembershipsSold")
+
   // Épica 9 · Notificaciones (H24): avisos que recibió este usuario.
   notifications Notification[]
   expiryNotices ExpiryNotice[]

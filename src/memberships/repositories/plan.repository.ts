@@ -47,6 +47,11 @@ export class PlanRepository {
     return this.prisma.plan.findUnique({ where: { id } });
   }
 
+  /** El plan de clase suelta que se vende hoy (la base permite uno activo). */
+  findActiveDropIn(): Promise<Plan | null> {
+    return this.prisma.plan.findFirst({ where: { type: 'DROP_IN', isActive: true } });
+  }
+
   /** Planes ordenados por nombre; con `activeOnly`, solo los que se venden. */
   findAll(activeOnly: boolean): Promise<Plan[]> {
     return this.prisma.plan.findMany({
