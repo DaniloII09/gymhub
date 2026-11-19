@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { CHARGES_SERVICE } from '@Common/contracts';
+import { CHARGES_SERVICE, PAYMENTS_SERVICE } from '@Common/contracts';
 import {
   ChargesController,
   MemberPaymentsController,
@@ -35,6 +35,8 @@ import {
     ChargesService,
     // Otros módulos (H04, H11) inyectan el contrato, no la clase concreta.
     { provide: CHARGES_SERVICE, useExisting: ChargesService },
+    // H04 (clase suelta) paga dentro de su propia transacción.
+    { provide: PAYMENTS_SERVICE, useExisting: PaymentsService },
     PaymentGatewayService,
     PaymentsService,
     MembershipStatusLookup,
@@ -44,6 +46,6 @@ import {
     ReceiptRepository,
   ],
   // La pasarela la reutilizan H04 (clase suelta) y H16 (pago en línea).
-  exports: [CHARGES_SERVICE, PaymentGatewayService],
+  exports: [CHARGES_SERVICE, PAYMENTS_SERVICE, PaymentGatewayService],
 })
 export class PaymentsModule {}
