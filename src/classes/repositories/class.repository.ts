@@ -1,4 +1,8 @@
-import { Injectable } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
+import {
+  CLASS_CANCELLATION_NOTIFIER,
+  type ClassCancellationNotifier,
+} from '@Common/contracts';
 import { PrismaService } from '@Prisma/services';
 import {
   CapacityBelowConfirmedReservationsError,
@@ -50,7 +54,52 @@ export type GymClassWithDetails = GymClassWithTrainer & {
  */
 @Injectable()
 export class ClassRepository {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(CLASS_CANCELLATION_NOTIFIER)
+    private readonly cancellationNotifier: ClassCancellationNotifier,
+  ) {}
+
+  /** La fila de la clase serializa esta operación con las reservas y ediciones. */
+  async cancel(
+    classId: number,
+    reason: string,
+  ): Promise<{ reservationsCancelled: number; noticesSent: number }> {
+    return this.prisma.$transaction(
+      async (tx) => {
+        const locked = await tx.$queryRaw<{ id: number }[]>`
+        SELECT id FROM gym_classes WHERE id = ${classId} FOR UPDATE`;
+        if (locked.length === 0) throw new ClassNotFoundError(classId);
+        const gymClass = await tx.gymClass.findUniqueOrThrow({
+          where: { id: classId },
+        });
+        if (
+          gymClass.status !== 'SCHEDULED' ||
+          gymClass.startsAt.getTime() <= Date.now()
+        ) {
+          throw new ClassNotScheduledError(classId);
+        }
+
+        // H27 lee reservas todavía confirmadas; toda la operación se revierte si falla el aviso.
+        const noticesSent =
+          await this.cancellationNotifier.notifyClassCancelled(
+            { classId, reason },
+            tx,
+          );
+        const cancelledAt = new Date();
+        const reservations = await tx.classReservation.updateMany({
+          where: { classId, status: 'CONFIRMED' },
+          data: { status: 'CANCELLED', cancelledAt, cancelledByGym: true },
+        });
+        await tx.gymClass.update({
+          where: { id: classId },
+          data: { status: 'CANCELLED', cancellationReason: reason },
+        });
+        return { reservationsCancelled: reservations.count, noticesSent };
+      },
+      { timeout: 15_000 },
+    );
+  }
 
   async findById(id: number): Promise<GymClass | null> {
     return this.prisma.gymClass.findUnique({ where: { id } });
@@ -298,4 +347,3 @@ export class ClassRepository {
     }
   }
 }
-

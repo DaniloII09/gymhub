@@ -42,13 +42,17 @@ export class ClassResponseDto {
   confirmedReservations!: number;
 
   @ApiProperty({
-    description: 'Cupos disponibles restantes (capacity - confirmedReservations)',
+    description:
+      'Cupos disponibles restantes (capacity - confirmedReservations)',
     example: 3,
   })
   spotsLeft!: number;
 
   @ApiProperty({ enum: ClassStatus, example: ClassStatus.SCHEDULED })
   status!: ClassStatus;
+
+  @ApiProperty({ example: null, nullable: true })
+  cancellationReason!: string | null;
 
   @ApiProperty({ example: '2026-11-08T20:00:00.000Z' })
   createdAt!: Date;
@@ -72,9 +76,9 @@ export class ClassResponseDto {
       confirmedReservations: entity.confirmedReservations,
       spotsLeft: Math.max(0, entity.capacity - entity.confirmedReservations),
       status: entity.status,
+      cancellationReason: entity.cancellationReason,
       createdAt: entity.createdAt,
       updatedAt: entity.updatedAt,
     };
   }
 }
-
