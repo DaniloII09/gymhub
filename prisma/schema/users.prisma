@@ -65,6 +65,9 @@ model User {
   notifications Notification[]
   expiryNotices ExpiryNotice[]
 
+  // Épica 8 · Reseñas (H22): reseñas escritas por este miembro.
+  reviews Review[] @relation("MemberReviews")
+
   // NOTA PARA EL EQUIPO: cuando tu modelo referencie a User (ej. Membership.member,
   // GroupClass.trainer), agregá acá la relación opuesta. Este archivo tiene
   // CODEOWNER = Danilo, así que ese cambio pasa por su revisión.
