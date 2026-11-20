@@ -1,29 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Matches } from 'class-validator';
-import {
-  REPORT_DATE_FORMAT_MESSAGE,
-  REPORT_DATE_PATTERN,
-} from '@Reports/services';
+import { ReportRangeQueryDto } from './report-range-query.dto.js';
 
 /** Query de GET /reports/income (BE-29.1). */
-export class IncomeReportQueryDto {
-  @ApiProperty({
-    example: '2026-09-01',
-    description: 'Primer día del rango (YYYY-MM-DD), incluido.',
-  })
-  // El formato se valida aquí; que la fecha exista, el orden y los 12 meses
-  // los revisa el servicio.
-  @Matches(REPORT_DATE_PATTERN, { message: REPORT_DATE_FORMAT_MESSAGE })
-  from!: string;
-
-  @ApiProperty({
-    example: '2026-11-30',
-    description:
-      'Último día del rango (YYYY-MM-DD), incluido. Hasta 12 meses después de from.',
-  })
-  @Matches(REPORT_DATE_PATTERN, { message: REPORT_DATE_FORMAT_MESSAGE })
-  to!: string;
-}
+export class IncomeReportQueryDto extends ReportRangeQueryDto {}
 
 /** Ingresos separados por concepto. */
 export class IncomeBreakdownDto {
