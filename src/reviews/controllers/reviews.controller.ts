@@ -62,10 +62,14 @@ export class ReviewsController {
   })
   @ApiCreatedResponse({ type: ReviewResponseDto })
   @ApiBadRequestResponse({ description: 'Estrellas o comentario fuera de rango.' })
+  @ApiForbiddenResponse({
+    description:
+      'El usuario no es Miembro o la sesión no se realizó (por ejemplo, NO_SHOW).',
+  })
   @ApiNotFoundResponse({ description: 'La clase o sesión personal no existe.' })
   @ApiConflictResponse({
     description:
-      'Sin asistencia, sesión NO_SHOW, plazo de 7 días vencido o reseña duplicada.',
+      'Clase sin asistencia, plazo de 7 días vencido o reseña duplicada.',
   })
   create(
     @Body() dto: CreateReviewDto,

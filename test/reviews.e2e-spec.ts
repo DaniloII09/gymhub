@@ -400,7 +400,7 @@ describe('Reseñas · H22 (e2e)', () => {
       })
       .expect(201);
 
-    // Sesión NO_SHOW -> 409 claro.
+    // Sesión NO_SHOW -> 403 claro.
     const noShowSession = await createSession(member.id, gymInstant(-1, 8), gymInstant(-1, 9), {
       status: 'COMPLETED',
       outcome: 'NO_SHOW',
@@ -409,7 +409,7 @@ describe('Reseñas · H22 (e2e)', () => {
       .post('/api/v1/reviews')
       .set('Authorization', `Bearer ${token}`)
       .send({ targetType: 'PERSONAL_SESSION', targetId: noShowSession.id, rating: 3 })
-      .expect(409);
+      .expect(403);
     expect(noShowRes.body.message).toBe('Solo puedes calificar sesiones que se realizaron.');
 
     // Sesión pasada del 7mo día (hace 8 días) -> 409 claro.

@@ -4,6 +4,7 @@ import { Prisma } from '@PrismaClient';
 import type { ReviewTargetType } from '@Reviews/dto';
 import {
   DuplicateReviewError,
+  ReviewForbiddenError,
   ReviewNotAllowedError,
   ReviewTargetNotFoundError,
 } from '@Reviews/errors';
@@ -383,7 +384,7 @@ export class ReviewRepository {
     }
 
     if (session.status !== 'COMPLETED' || session.outcome !== 'COMPLETED') {
-      throw new ReviewNotAllowedError(SESSION_COMPLETED_REQUIRED_MESSAGE);
+      throw new ReviewForbiddenError(SESSION_COMPLETED_REQUIRED_MESSAGE);
     }
 
     if (data.now.getTime() < session.endsAt.getTime()) {

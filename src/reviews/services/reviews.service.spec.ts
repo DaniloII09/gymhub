@@ -1,9 +1,14 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  ForbiddenException,
+  NotFoundException,
+} from '@nestjs/common';
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
 import { CreateReviewDto } from '@Reviews/dto';
 import {
   DuplicateReviewError,
+  ReviewForbiddenError,
   ReviewNotAllowedError,
   ReviewTargetNotFoundError,
 } from '@Reviews/errors';
@@ -151,9 +156,24 @@ describe('ReviewsService (H22)', () => {
     ).rejects.toThrow(new NotFoundException('No encontramos esa clase.'));
   });
 
+  it('traduce ReviewForbiddenError a 403', async () => {
+    const { service, reviewRepository } = build();
+    reviewRepository.createReview.mockRejectedValue(
+      new ReviewForbiddenError(SESSION_COMPLETED_REQUIRED_MESSAGE),
+    );
+    await expect(
+      service.create(MEMBER_ID, {
+        targetType: 'PERSONAL_SESSION',
+        targetId: 1,
+        rating: 4,
+      }),
+    ).rejects.toThrow(
+      new ForbiddenException(SESSION_COMPLETED_REQUIRED_MESSAGE),
+    );
+  });
+
   it.each([
     [new DuplicateReviewError(), 'Ya calificaste esta clase o sesión.'],
-    [new ReviewNotAllowedError(SESSION_COMPLETED_REQUIRED_MESSAGE), SESSION_COMPLETED_REQUIRED_MESSAGE],
     [new ReviewNotAllowedError(CLASS_ATTENDANCE_REQUIRED_MESSAGE), CLASS_ATTENDANCE_REQUIRED_MESSAGE],
     [new ReviewNotAllowedError(REVIEW_WINDOW_EXPIRED_MESSAGE), REVIEW_WINDOW_EXPIRED_MESSAGE],
   ])('traduce errores de negocio a 409 (%s)', async (domainError, message) => {

@@ -16,7 +16,7 @@ Todos los endpoints requieren JWT con rol **Miembro** (`403` para otro rol, `401
 
 - **Ventana de 7 días (zona `America/El_Salvador`):** una clase o sesión puede calificarse desde que termina (`endsAt <= now`) y hasta el cierre (`23:59:59.999-06:00`) del séptimo día calendario posterior en la zona horaria del gimnasio.
 - **Clases grupales (`CLASS`):** requiere clase `SCHEDULED` (no cancelada), reserva `CONFIRMED` del miembro y al menos un `CheckIn` del miembro en el mismo día del gimnasio antes o en el instante `endsAt`.
-- **Sesiones personales (`PERSONAL_SESSION`):** requiere pertenecer al miembro del token, `status = COMPLETED` y `outcome = COMPLETED` (`NO_SHOW` responde `409` `"Solo puedes calificar sesiones que se realizaron."`).
+- **Sesiones personales (`PERSONAL_SESSION`):** requiere pertenecer al miembro del token, `status = COMPLETED` y `outcome = COMPLETED` (`NO_SHOW` responde `403` `"Solo puedes calificar sesiones que se realizaron."`).
 - **Unicidad:** cada miembro puede calificar una sola vez cada clase o sesión (`409` `"Ya calificaste esta clase o sesión."`), garantizado también en PostgreSQL mediante restricciones únicas.
 - **Verificación en servidor:** `POST /api/v1/reviews` vuelve a verificar todas las reglas al guardar dentro de una transacción.
 
