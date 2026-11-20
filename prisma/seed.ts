@@ -99,6 +99,74 @@ const OVERDUE_CHARGES = [
 ] as const;
 
 /**
+ * Comprobantes de meses anteriores para el reporte de ingresos (H29): los
+ * tres conceptos repartidos en los últimos 3 meses, en efectivo y con tarjeta.
+ * Cada pago tiene una clave fija, así el seed no los duplica.
+ */
+const INCOME_RECEIPTS = [
+  {
+    key: '00000000-0000-4000-8000-000000002901',
+    email: 'luis.martinez@gymhub.test',
+    monthsAgo: 3,
+    day: 10,
+    type: 'PERSONAL_SESSION',
+    concept: 'Sesión personal (prueba H29)',
+    amount: 15,
+    method: 'CASH',
+  },
+  {
+    key: '00000000-0000-4000-8000-000000002902',
+    email: 'miembro@gymhub.test',
+    monthsAgo: 2,
+    day: 5,
+    type: 'MEMBERSHIP',
+    concept: 'Membresía Mensual (prueba H29)',
+    amount: 25,
+    method: 'CARD',
+  },
+  {
+    key: '00000000-0000-4000-8000-000000002903',
+    email: 'ana.gomez@gymhub.test',
+    monthsAgo: 2,
+    day: 12,
+    type: 'DROP_IN',
+    concept: 'Clase suelta (prueba H29)',
+    amount: 5,
+    method: 'CASH',
+  },
+  {
+    key: '00000000-0000-4000-8000-000000002904',
+    email: 'luis.martinez@gymhub.test',
+    monthsAgo: 1,
+    day: 3,
+    type: 'MEMBERSHIP',
+    concept: 'Membresía Trimestral (prueba H29)',
+    amount: 60,
+    method: 'CASH',
+  },
+  {
+    key: '00000000-0000-4000-8000-000000002905',
+    email: 'ana.gomez@gymhub.test',
+    monthsAgo: 1,
+    day: 14,
+    type: 'PERSONAL_SESSION',
+    concept: 'Sesión personal (prueba H29)',
+    amount: 15,
+    method: 'CARD',
+  },
+  {
+    key: '00000000-0000-4000-8000-000000002906',
+    email: 'miembro@gymhub.test',
+    monthsAgo: 1,
+    day: 20,
+    type: 'DROP_IN',
+    concept: 'Clase suelta (prueba H29)',
+    amount: 5,
+    method: 'CASH',
+  },
+] as const;
+
+/**
  * Clases grupales de prueba (DB-6.1 / H06): 6 clases programadas en días futuros
  * asignadas a entrenador@gymhub.test. Se identifican por nombre y entrenador
  * para no duplicarlas ni borrar datos existentes al re-ejecutar el seed.
@@ -263,6 +331,7 @@ async function main() {
   await seedMemberships();
   await seedCheckIns();
   await seedCharges();
+  await seedIncomeReceipts();
   await seedGymClasses();
   await seedPersonalSessionPricing();
   await seedNotifications();
@@ -515,6 +584,78 @@ async function seedCharges() {
 
     console.log(`${availabilityBlocks.length} bloques de disponibilidad cargados`);
   }
+}
+
+async function seedIncomeReceipts() {
+  const reception = await prisma.user.findUniqueOrThrow({
+    where: { email: 'recepcion@gymhub.test' },
+  });
+  const today = new Date();
+  let created = 0;
+
+  for (const {
+    key,
+    email,
+    monthsAgo,
+    day,
+    method,
+    ...charge
+  } of INCOME_RECEIPTS) {
+    const exists = await prisma.payment.count({
+      where: { idempotencyKey: key },
+    });
+    if (exists) continue;
+
+    const member = await prisma.user.findUniqueOrThrow({ where: { email } });
+    // 12:00 en El Salvador (18:00 UTC): el día no cambia por la zona horaria.
+    const issuedAt = new Date(
+      Date.UTC(
+        today.getUTCFullYear(),
+        today.getUTCMonth() - monthsAgo,
+        day,
+        18,
+      ),
+    );
+    await prisma.$transaction(async (tx) => {
+      const paid = await tx.charge.create({
+        data: {
+          ...charge,
+          memberId: member.id,
+          dueDate: issuedAt,
+          status: 'PAID',
+          paidAt: issuedAt,
+        },
+      });
+      const payment = await tx.payment.create({
+        data: {
+          chargeId: paid.id,
+          method,
+          result: 'APPROVED',
+          cardLast4: method === 'CARD' ? '4242' : null,
+          idempotencyKey: key,
+          registeredById: method === 'CARD' ? member.id : reception.id,
+          createdAt: issuedAt,
+        },
+      });
+      // Mismo criterio que PaymentRepository: el número sale del id.
+      const [{ next }] = await tx.$queryRaw<{ next: bigint }[]>`
+        SELECT nextval(pg_get_serial_sequence('receipts', 'id')) AS next`;
+      await tx.receipt.create({
+        data: {
+          id: Number(next),
+          number: `C-${String(next).padStart(6, '0')}`,
+          paymentId: payment.id,
+          chargeId: paid.id,
+          issuedAt,
+        },
+      });
+    });
+    created += 1;
+  }
+  console.log(
+    `${INCOME_RECEIPTS.length} comprobantes de meses anteriores para el reporte de ingresos (H29)` +
+      (created ? '' : ', ya existían'),
+  );
 }
 
 async function seedGymClasses() {

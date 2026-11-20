@@ -1,7 +1,13 @@
 import { Module } from '@nestjs/common';
+import { IncomeReportController } from '@Reports/controllers';
+import { IncomeReportService } from '@Reports/services';
+import { IncomeRepository } from '@Reports/repositories';
 
 // Épica 10 · Reportes y analítica. Dueño: Jaime.
-// Esqueleto. Agregá controllers/, services/, repositories/ y dto/ a medida que
-// los creés, y declaralos acá. Usá el módulo de usuarios como referencia.
-@Module({})
+// Sin tablas propias: los reportes consultan datos de otros módulos.
+// H29: ingresos de un periodo (comprobantes de Pagos).
+@Module({
+  controllers: [IncomeReportController],
+  providers: [IncomeReportService, IncomeRepository],
+})
 export class ReportsModule {}
