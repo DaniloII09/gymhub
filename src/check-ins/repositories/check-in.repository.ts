@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@Prisma/services';
-import { CheckInMemberNotFoundError, RecentCheckInError } from '@CheckIns/errors';
+import {
+  CheckInMemberNotFoundError,
+  ExceptionReasonRequiredError,
+  RecentCheckInError,
+} from '@CheckIns/errors';
 import type { CheckIn } from '@PrismaClient';
 import type { MembershipStatus } from '@Common/contracts';
 
@@ -14,6 +18,13 @@ export interface RegisterCheckInData {
   registeredById: string;
   /** Hora del servidor. */
   now: Date;
+  /**
+   * H14: true si la membresía no está vigente. Entonces el ingreso exige
+   * `exceptionReason` y se guarda como excepción.
+   */
+  requiresException: boolean;
+  /** H14: motivo para dejar pasar a un miembro sin membresía vigente. */
+  exceptionReason?: string;
 }
 
 export interface RegisteredCheckIn {
@@ -32,6 +43,7 @@ export class CheckInRepository {
    * en uno, así que el segundo ve al primero y no pasa la regla de 30 minutos.
    *
    * @throws {CheckInMemberNotFoundError} si no existe un miembro activo con ese id.
+   * @throws {ExceptionReasonRequiredError} si la membresía no está vigente y falta el motivo (H14).
    * @throws {RecentCheckInError} si ya ingresó hace menos de 30 minutos.
    */
   async register(data: RegisterCheckInData): Promise<RegisteredCheckIn> {
@@ -41,6 +53,9 @@ export class CheckInRepository {
         WHERE id = ${data.memberId}::uuid AND role = 'MEMBER' AND is_active
         FOR UPDATE`;
       if (member.length === 0) throw new CheckInMemberNotFoundError(data.memberId);
+      if (data.requiresException && !data.exceptionReason) {
+        throw new ExceptionReasonRequiredError(data.memberId);
+      }
 
       const recent = await tx.checkIn.count({
         where: {
@@ -56,6 +71,10 @@ export class CheckInRepository {
           checkedInAt: data.now,
           membershipStatus: data.membershipStatus,
           registeredById: data.registeredById,
+          // H14: solo es excepción si la membresía no está vigente; con
+          // membresía Activa el motivo no aplica y no se guarda.
+          isException: data.requiresException,
+          exceptionReason: data.requiresException ? data.exceptionReason : null,
         },
       });
       return { checkIn, memberCode: member[0].memberCode ?? '' };

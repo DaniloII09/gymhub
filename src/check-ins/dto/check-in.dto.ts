@@ -1,9 +1,12 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsString, IsUUID, Length } from 'class-validator';
+import { IsOptional, IsString, IsUUID, Length } from 'class-validator';
 import type { MembershipStatus } from '@Common/contracts';
 
 export const LOOKUP_LENGTH_MESSAGE = 'Escribe entre 2 y 100 caracteres para buscar.';
+export const EXCEPTION_REASON_MIN = 5;
+export const EXCEPTION_REASON_MAX = 200;
+export const EXCEPTION_REASON_LENGTH_MESSAGE = `El motivo debe tener entre ${EXCEPTION_REASON_MIN} y ${EXCEPTION_REASON_MAX} caracteres.`;
 const STATUSES: MembershipStatus[] = ['ACTIVE', 'PENDING_PAYMENT', 'EXPIRED', 'NONE'];
 
 /** Query de GET /check-ins/lookup (BE-13.1). */
@@ -30,6 +33,12 @@ export class CheckInLookupItemDto {
   membershipStatus!: MembershipStatus;
 
   @ApiProperty({
+    description:
+      'H14: true solo con membresía Activa (incluida una clase suelta de hoy). Si es false, el ingreso exige exceptionReason.',
+  })
+  accessAllowed!: boolean;
+
+  @ApiProperty({
     type: String,
     nullable: true,
     example: '2026-12-08',
@@ -49,6 +58,24 @@ export class CreateCheckInDto {
   @ApiProperty({ format: 'uuid', description: 'Usuario con rol Miembro.' })
   @IsUUID('all', { message: 'El miembro no es válido.' })
   memberId!: string;
+
+  @ApiPropertyOptional({
+    minLength: EXCEPTION_REASON_MIN,
+    maxLength: EXCEPTION_REASON_MAX,
+    example: 'Renueva el viernes; el gerente autorizó el ingreso.',
+    description:
+      'H14: obligatorio si la membresía no está Activa; se guarda con el ingreso. Con membresía Activa se ignora.',
+  })
+  // Se recorta antes de validar; vacío cuenta como "sin motivo".
+  @Transform(({ value }: { value: unknown }) => {
+    if (typeof value !== 'string') return value;
+    const trimmed = value.trim();
+    return trimmed === '' ? undefined : trimmed;
+  })
+  @IsOptional()
+  @IsString({ message: EXCEPTION_REASON_LENGTH_MESSAGE })
+  @Length(EXCEPTION_REASON_MIN, EXCEPTION_REASON_MAX, { message: EXCEPTION_REASON_LENGTH_MESSAGE })
+  exceptionReason?: string;
 }
 
 /** Respuesta 201 de POST /check-ins. */

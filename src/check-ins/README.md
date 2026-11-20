@@ -1,6 +1,7 @@
 # Épica 4 · Check-in / control de acceso
 
 **H13: Registrar el ingreso de un miembro.** Dueño: Danilo.
+**H14: Recibir una alerta de membresía vencida al registrar un ingreso.** Dueño: Danilo (backend); Luis (FE-14.1).
 
 ## Endpoints
 
@@ -9,8 +10,8 @@ sin sesión).
 
 | Método | Ruta | Task |
 |---|---|---|
-| GET | `/api/v1/check-ins/lookup?q=GYM-000123` | BE-13.1 |
-| POST | `/api/v1/check-ins` | BE-13.1 |
+| GET | `/api/v1/check-ins/lookup?q=GYM-000123` | BE-13.1, BE-14.1 |
+| POST | `/api/v1/check-ins` | BE-13.1, BE-14.1 |
 
 ### Búsqueda (`GET /check-ins/lookup`)
 
@@ -18,7 +19,8 @@ sin sesión).
 miembros activos por **código exacto** o **parte del nombre**, sin distinguir
 mayúsculas, y devuelve `{ data[] }` con **máximo 10**, ordenados por nombre.
 Cada resultado trae `memberId`, `memberCode`, `fullName`, `membershipStatus`
-(`ACTIVE`, `PENDING_PAYMENT`, `EXPIRED` o `NONE`) y `nextPaymentDate`
+(`ACTIVE`, `PENDING_PAYMENT`, `EXPIRED` o `NONE`), `accessAllowed` (H14: true
+solo con `ACTIVE`, incluida una clase suelta de hoy) y `nextPaymentDate`
 (`AAAA-MM-DD`, el vencimiento de la membresía actual; `null` sin membresía).
 
 Sin coincidencias, `data` viene vacío: la pantalla muestra "No encontramos
@@ -41,8 +43,24 @@ Cuerpo `{ memberId }`. Responde 201 con `checkInId`, `memberCode`,
 - 404 "No encontramos ese miembro." si no existe, no es miembro o está
   desactivado; 400 si el id no es un uuid.
 
-La alerta de membresía no vigente y el motivo de excepción son de H14
-(BE-14.1); la tabla ya trae `is_exception` y `exception_reason` (DB-13.1).
+### Membresía no vigente (H14 · BE-14.1)
+
+`POST /check-ins` acepta `exceptionReason` (se recorta; de 5 a 200 caracteres).
+
+| Membresía | Sin motivo | Con motivo |
+|---|---|---|
+| `ACTIVE` (incluida la clase suelta de hoy) | 201, `isException` false | 201; el motivo se ignora y no se guarda |
+| `PENDING_PAYMENT`, `EXPIRED` o `NONE` | 400 "Escribe el motivo para dejarlo pasar." y **no se registra** | 201 con `isException` true y el motivo guardado junto al ingreso |
+
+- Un motivo vacío o de solo espacios cuenta como sin motivo; uno de menos de 5
+  o más de 200 caracteres responde 400 "El motivo debe tener entre 5 y 200
+  caracteres.".
+- El orden de los errores es 404 (miembro), 400 (motivo) y 409 (30 minutos):
+  la regla del motivo se revisa con la fila del miembro ya bloqueada.
+- La base exige que una excepción lleve motivo (`check_ins_exception_needs_reason`).
+- La alerta "Membresía no vigente. Próxima fecha de pago: {fecha}." con el campo
+  de motivo es FE-14.1 (Luis): usa `accessAllowed` y `nextPaymentDate` de la
+  búsqueda y envía `exceptionReason` al registrar.
 
 ## Diagrama entidad-relación
 

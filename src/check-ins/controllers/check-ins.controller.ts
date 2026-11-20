@@ -43,12 +43,18 @@ export class CheckInsController {
   }
 
   @Post()
-  @ApiOperation({ summary: 'Registra el ingreso de un miembro con la hora del servidor' })
+  @ApiOperation({
+    summary:
+      'Registra el ingreso de un miembro con la hora del servidor; sin membresía vigente exige el motivo de la excepción (H14)',
+  })
   @ApiCreatedResponse({ type: CheckInResponseDto })
-  @ApiBadRequestResponse({ description: 'Datos inválidos.' })
+  @ApiBadRequestResponse({
+    description:
+      'Datos inválidos, membresía no Activa sin exceptionReason ("Escribe el motivo para dejarlo pasar.") o motivo fuera de 5 a 200 caracteres.',
+  })
   @ApiNotFoundResponse({ description: 'El miembro no existe.' })
   @ApiConflictResponse({ description: 'El miembro ya registró su ingreso hace menos de 30 minutos.' })
   register(@Body() dto: CreateCheckInDto, @CurrentUser() user: User): Promise<CheckInResponseDto> {
-    return this.checkInsService.register(dto.memberId, user.id);
+    return this.checkInsService.register(dto.memberId, user.id, new Date(), dto.exceptionReason);
   }
 }
