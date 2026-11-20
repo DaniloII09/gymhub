@@ -1,11 +1,13 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import type { CreateReviewDto } from '@Reviews/dto';
 import {
   DuplicateReviewError,
+  ReviewForbiddenError,
   ReviewNotAllowedError,
   ReviewTargetNotFoundError,
 } from '@Reviews/errors';
@@ -50,6 +52,9 @@ export class ReviewsService {
     } catch (error) {
       if (error instanceof ReviewTargetNotFoundError) {
         throw new NotFoundException(error.message);
+      }
+      if (error instanceof ReviewForbiddenError) {
+        throw new ForbiddenException(error.message);
       }
       if (
         error instanceof DuplicateReviewError ||

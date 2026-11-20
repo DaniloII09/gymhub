@@ -18,3 +18,10 @@ export class ReviewNotAllowedError extends Error {
     this.name = 'ReviewNotAllowedError';
   }
 }
+
+export class ReviewForbiddenError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ReviewForbiddenError';
+  }
+}
