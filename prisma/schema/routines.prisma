@@ -2,3 +2,26 @@
 // Agregá acá los modelos de tu módulo en tu feat branch. Si referencian a
 // User, agregá la relación opuesta en users.prisma (revisión de Danilo).
 // IDs: Int autoincrement para el dominio; los usuarios usan UUID.
+
+/// Registro periódico de medidas y peso de un miembro (H19).
+/// Restricciones agregadas a mano en la migración DB-19.1:
+///   - CHECK weight_kg BETWEEN 20 AND 300.
+///   - CHECK chest_cm, waist_cm, arm_cm BETWEEN 10 AND 250.
+///   - Unicidad por (member_id, recorded_at).
+model ProgressEntry {
+  id         Int      @id @default(autoincrement())
+  memberId   String   @map("member_id") @db.Uuid
+  recordedAt DateTime @map("recorded_at") @db.Date
+  weightKg   Decimal  @map("weight_kg") @db.Decimal(5, 2)
+  chestCm    Decimal  @map("chest_cm") @db.Decimal(5, 2)
+  waistCm    Decimal  @map("waist_cm") @db.Decimal(5, 2)
+  armCm      Decimal  @map("arm_cm") @db.Decimal(5, 2)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  member User @relation("MemberProgressEntries", fields: [memberId], references: [id], onDelete: Restrict)
+
+  @@unique([memberId, recordedAt])
+  @@index([memberId, recordedAt])
+  @@map("progress_entries")
+}
