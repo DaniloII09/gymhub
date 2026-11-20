@@ -1,7 +1,11 @@
 import { Module } from '@nestjs/common';
+import { ProgressController } from '@Routines/controllers';
+import { ProgressRepository } from '@Routines/repositories';
+import { ProgressService } from '@Routines/services';
 
-// Épica 6 · Rutinas y progreso. Dueño: Christian.
-// Esqueleto. Agregá controllers/, services/, repositories/ y dto/ a medida que
-// los creés, y declaralos acá. Usá el módulo de usuarios como referencia.
-@Module({})
+// Épica 6 · Progreso y evolución (H19). Dueño: Christian / Alexis Merino.
+@Module({
+  controllers: [ProgressController],
+  providers: [ProgressService, ProgressRepository],
+})
 export class RoutinesModule {}
