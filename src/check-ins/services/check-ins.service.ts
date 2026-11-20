@@ -1,13 +1,28 @@
-import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { MEMBERSHIP_STATUS_SERVICE, type MembershipStatusService } from '@Common/contracts';
+import {
+  BadRequestException,
+  ConflictException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import {
+  MEMBERSHIP_STATUS_SERVICE,
+  type MembershipStatus,
+  type MembershipStatusService,
+} from '@Common/contracts';
 import { CheckInRepository } from '@CheckIns/repositories';
-import { CheckInMemberNotFoundError, RecentCheckInError } from '@CheckIns/errors';
+import {
+  CheckInMemberNotFoundError,
+  ExceptionReasonRequiredError,
+  RecentCheckInError,
+} from '@CheckIns/errors';
 import type { CheckInLookupItemDto, CheckInResponseDto } from '@CheckIns/dto';
 import { gymToday } from '@Memberships/services';
 import { UserRepository } from '@Users/repositories';
 
 export const CHECK_IN_MEMBER_NOT_FOUND_MESSAGE = 'No encontramos ese miembro.';
 export const RECENT_CHECK_IN_MESSAGE = 'Este miembro ya registró su ingreso hace menos de 30 minutos.';
+export const EXCEPTION_REASON_REQUIRED_MESSAGE = 'Escribe el motivo para dejarlo pasar.';
 /** Máximo de resultados de la búsqueda (BE-13.1). */
 export const LOOKUP_LIMIT = 10;
 
@@ -40,6 +55,7 @@ export class CheckInsService {
           memberCode: member.memberCode ?? '',
           fullName: member.fullName,
           membershipStatus: current.status,
+          accessAllowed: isAccessAllowed(current.status),
           // El vencimiento viaja como el último instante del día del gimnasio.
           nextPaymentDate: current.endDate ? gymToday(current.endDate) : null,
         };
@@ -50,8 +66,17 @@ export class CheckInsService {
   /**
    * Registra el ingreso con la hora del servidor y el usuario autenticado. No
    * deja registrar dos veces al mismo miembro en 30 minutos.
+   *
+   * H14: si la membresía no está Activa, exige el motivo (5 a 200 caracteres)
+   * y guarda el ingreso como excepción. Con membresía Activa el motivo se
+   * ignora.
    */
-  async register(memberId: string, registeredById: string, now: Date = new Date()): Promise<CheckInResponseDto> {
+  async register(
+    memberId: string,
+    registeredById: string,
+    now: Date = new Date(),
+    exceptionReason?: string,
+  ): Promise<CheckInResponseDto> {
     const current = await this.membershipStatus.currentFor(memberId);
     try {
       const { checkIn, memberCode } = await this.checkInRepository.register({
@@ -59,6 +84,8 @@ export class CheckInsService {
         membershipStatus: current.status,
         registeredById,
         now,
+        requiresException: !isAccessAllowed(current.status),
+        exceptionReason,
       });
       return {
         checkInId: checkIn.id,
@@ -71,8 +98,19 @@ export class CheckInsService {
       if (error instanceof CheckInMemberNotFoundError) {
         throw new NotFoundException(CHECK_IN_MEMBER_NOT_FOUND_MESSAGE);
       }
+      if (error instanceof ExceptionReasonRequiredError) {
+        throw new BadRequestException(EXCEPTION_REASON_REQUIRED_MESSAGE);
+      }
       if (error instanceof RecentCheckInError) throw new ConflictException(RECENT_CHECK_IN_MESSAGE);
       throw error;
     }
   }
+}
+
+/**
+ * H14: solo una membresía Activa deja pasar sin aviso, incluida la clase suelta
+ * de hoy (que el contrato devuelve ACTIVE hasta que termina el día).
+ */
+export function isAccessAllowed(status: MembershipStatus): boolean {
+  return status === 'ACTIVE';
 }

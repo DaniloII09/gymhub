@@ -1,11 +1,17 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import {
   CHECK_IN_MEMBER_NOT_FOUND_MESSAGE,
   CheckInsService,
+  EXCEPTION_REASON_REQUIRED_MESSAGE,
+  isAccessAllowed,
   LOOKUP_LIMIT,
   RECENT_CHECK_IN_MESSAGE,
 } from '@CheckIns/services';
-import { CheckInMemberNotFoundError, RecentCheckInError } from '@CheckIns/errors';
+import {
+  CheckInMemberNotFoundError,
+  ExceptionReasonRequiredError,
+  RecentCheckInError,
+} from '@CheckIns/errors';
 import type { CheckInRepository } from '@CheckIns/repositories';
 import type { UserRepository } from '@Users/repositories';
 import type { CurrentMembership, MembershipStatusService } from '@Common/contracts';
@@ -67,6 +73,7 @@ describe('CheckInsService.lookup (BE-13.1)', () => {
         memberCode: 'GYM-000001',
         fullName: 'Juan Perez',
         membershipStatus: 'ACTIVE',
+        accessAllowed: true,
         nextPaymentDate: '2026-12-08',
       },
       {
@@ -74,6 +81,7 @@ describe('CheckInsService.lookup (BE-13.1)', () => {
         memberCode: 'GYM-000009',
         fullName: 'Juana Nueva',
         membershipStatus: 'NONE',
+        accessAllowed: false,
         nextPaymentDate: null,
       },
     ]);
@@ -97,6 +105,8 @@ describe('CheckInsService.register (BE-13.1)', () => {
       membershipStatus: 'ACTIVE',
       registeredById: 'recep',
       now: NOW,
+      requiresException: false,
+      exceptionReason: undefined,
     });
     expect(result).toEqual({
       checkInId: 21,
@@ -113,6 +123,42 @@ describe('CheckInsService.register (BE-13.1)', () => {
     await expect(service.register(MEMBER_ID, 'recep', NOW)).rejects.toThrow(
       new ConflictException(RECENT_CHECK_IN_MESSAGE),
     );
+  });
+
+  it('H14: sin membresía vigente pide la excepción y pasa el motivo al repositorio', async () => {
+    const { service, checkInRepository } = build();
+    checkInRepository.register.mockImplementation(async (data) => ({
+      checkIn: { id: 22, checkedInAt: data.now, isException: data.requiresException },
+      memberCode: 'GYM-000009',
+    }));
+
+    const result = await service.register('other', 'recep', NOW, 'Pagará al salir.');
+
+    expect(checkInRepository.register).toHaveBeenCalledWith(
+      expect.objectContaining({
+        membershipStatus: 'NONE',
+        requiresException: true,
+        exceptionReason: 'Pagará al salir.',
+      }),
+    );
+    expect(result).toMatchObject({ membershipStatus: 'NONE', isException: true });
+  });
+
+  it('H14: sin motivo responde 400 con el mensaje de la historia', async () => {
+    const { service, checkInRepository } = build();
+    checkInRepository.register.mockRejectedValue(new ExceptionReasonRequiredError('other'));
+    await expect(service.register('other', 'recep', NOW)).rejects.toThrow(
+      new BadRequestException(EXCEPTION_REASON_REQUIRED_MESSAGE),
+    );
+  });
+
+  it.each([
+    ['ACTIVE', true],
+    ['PENDING_PAYMENT', false],
+    ['EXPIRED', false],
+    ['NONE', false],
+  ] as const)('H14: accessAllowed con %s es %s', (status, allowed) => {
+    expect(isAccessAllowed(status)).toBe(allowed);
   });
 
   it('un miembro inexistente responde 404', async () => {
