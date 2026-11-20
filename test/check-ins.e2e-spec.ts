@@ -15,7 +15,7 @@ import { PrismaService } from '@Prisma/services';
 const PASSWORD = 'Demo1234!';
 const EMAIL_PREFIX = 'e2e.h13.';
 
-describe('Check-in · H13 (e2e)', () => {
+describe('Check-in · H13 y H14 (e2e)', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let receptionToken: string;
@@ -25,8 +25,62 @@ describe('Check-in · H13 (e2e)', () => {
   const api = () => request(app.getHttpServer());
   const lookup = (q: string, token = receptionToken) =>
     api().get('/api/v1/check-ins/lookup').query({ q }).set('Authorization', `Bearer ${token}`);
-  const checkIn = (memberId: string, token = receptionToken) =>
-    api().post('/api/v1/check-ins').set('Authorization', `Bearer ${token}`).send({ memberId });
+  const checkIn = (memberId: string, token = receptionToken, extra: object = {}) =>
+    api()
+      .post('/api/v1/check-ins')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ memberId, ...extra });
+
+  /** Membresía guardada directamente, con su cobro pagado o no. */
+  async function giveMembership(
+    memberId: string,
+    opts: { planType?: 'MONTHLY' | 'DROP_IN'; startDays?: number; endDays?: number; paid?: boolean } = {},
+  ) {
+    const { planType = 'MONTHLY', startDays = -5, endDays = 24, paid = true } = opts;
+    const plan = await prisma.plan.findFirstOrThrow({
+      where: { type: planType, isActive: true },
+    });
+    const today = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/El_Salvador',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+    const day = (offset: number) => {
+      const d = new Date(`${today}T00:00:00.000Z`);
+      d.setUTCDate(d.getUTCDate() + offset);
+      return d;
+    };
+    const membership = await prisma.membership.create({
+      data: {
+        memberId,
+        planId: plan.id,
+        planType,
+        startDate: day(startDays),
+        endDate: day(endDays),
+        status: paid ? 'ACTIVE' : 'PENDING_PAYMENT',
+        createdById: memberId,
+      },
+    });
+    await prisma.charge.create({
+      data: {
+        memberId,
+        type: planType === 'DROP_IN' ? 'DROP_IN' : 'MEMBERSHIP',
+        concept: plan.name,
+        amount: plan.price,
+        dueDate: day(startDays),
+        membershipId: membership.id,
+        ...(paid ? { status: 'PAID' as const, paidAt: new Date() } : {}),
+      },
+    });
+  }
+
+  /** Miembro con una Mensual pagada y vigente: entra sin excepción (H13). */
+  async function activeMember() {
+    const member = await newMember();
+    await giveMembership(member.id);
+    return member;
+  }
 
   /** Miembro nuevo, sin membresías ni ingresos, con un nombre único. */
   async function newMember(name = `Ingreso ${randomUUID().slice(0, 8)}`) {
@@ -48,6 +102,8 @@ describe('Check-in · H13 (e2e)', () => {
   async function cleanUp() {
     const ofTestMembers = { member: { email: { startsWith: EMAIL_PREFIX } } };
     await prisma.checkIn.deleteMany({ where: ofTestMembers });
+    await prisma.charge.deleteMany({ where: ofTestMembers });
+    await prisma.membership.deleteMany({ where: ofTestMembers });
     await prisma.user.deleteMany({ where: { email: { startsWith: EMAIL_PREFIX } } });
   }
 
@@ -97,6 +153,7 @@ describe('Check-in · H13 (e2e)', () => {
           memberCode: member.memberCode,
           fullName: member.fullName,
           membershipStatus: 'NONE',
+          accessAllowed: false,
           nextPaymentDate: null,
         },
       ]);
@@ -122,7 +179,7 @@ describe('Check-in · H13 (e2e)', () => {
 
   describe('POST /check-ins', () => {
     it('201 guarda la hora del servidor, quien registra y el estado de la membresía', async () => {
-      const member = await newMember();
+      const member = await activeMember();
       const before = Date.now();
 
       const res = await checkIn(member.id);
@@ -130,7 +187,7 @@ describe('Check-in · H13 (e2e)', () => {
       expect(res.status).toBe(201);
       expect(res.body).toMatchObject({
         memberCode: member.memberCode,
-        membershipStatus: 'NONE',
+        membershipStatus: 'ACTIVE',
         isException: false,
       });
       const at = new Date(res.body.checkedInAt).getTime();
@@ -142,11 +199,11 @@ describe('Check-in · H13 (e2e)', () => {
         include: { registeredBy: true },
       });
       expect(saved.registeredBy.email).toBe('recepcion@gymhub.test');
-      expect(saved.membershipStatus).toBe('NONE');
+      expect(saved.membershipStatus).toBe('ACTIVE');
     });
 
     it('un segundo ingreso dentro de 30 minutos responde 409 con el mensaje de la historia', async () => {
-      const member = await newMember();
+      const member = await activeMember();
       await checkIn(member.id);
       const res = await checkIn(member.id);
       expect(res.status).toBe(409);
@@ -155,8 +212,8 @@ describe('Check-in · H13 (e2e)', () => {
     });
 
     it('un ingreso de hace 10 minutos también bloquea; uno de hace 31 minutos no', async () => {
-      const recent = await newMember();
-      const old = await newMember();
+      const recent = await activeMember();
+      const old = await activeMember();
       const reception = await prisma.user.findUniqueOrThrow({
         where: { email: 'recepcion@gymhub.test' },
       });
@@ -183,7 +240,7 @@ describe('Check-in · H13 (e2e)', () => {
     });
 
     it('dos registros simultáneos del mismo miembro: uno 201 y otro 409', async () => {
-      const member = await newMember();
+      const member = await activeMember();
       const results = await Promise.all([checkIn(member.id), checkIn(member.id)]);
       expect(results.map((r) => r.status).sort((a, b) => a - b)).toEqual([201, 409]);
       await expect(prisma.checkIn.count({ where: { memberId: member.id } })).resolves.toBe(1);
@@ -196,6 +253,93 @@ describe('Check-in · H13 (e2e)', () => {
       });
       expect((await checkIn(trainer.id)).status).toBe(404);
       expect((await checkIn('no-es-uuid')).status).toBe(400);
+    });
+  });
+
+  describe('Alerta de membresía no vigente · H14 (BE-14.1)', () => {
+    const REASON = 'Renueva el viernes; el gerente autorizó.';
+
+    it('accessAllowed: true con Activa, false con Vencida, Pendiente de pago o sin membresía', async () => {
+      const active = await activeMember();
+      const expired = await newMember();
+      await giveMembership(expired.id, { startDays: -40, endDays: -11 });
+      const pending = await newMember();
+      await giveMembership(pending.id, { startDays: 0, endDays: 29, paid: false });
+      const none = await newMember();
+
+      const allowed = async (code: string | null) =>
+        (await lookup(code as string)).body.data[0];
+      expect(await allowed(active.memberCode)).toMatchObject({ membershipStatus: 'ACTIVE', accessAllowed: true });
+      expect(await allowed(expired.memberCode)).toMatchObject({ membershipStatus: 'EXPIRED', accessAllowed: false });
+      expect(await allowed(pending.memberCode)).toMatchObject({ membershipStatus: 'PENDING_PAYMENT', accessAllowed: false });
+      expect(await allowed(none.memberCode)).toMatchObject({ membershipStatus: 'NONE', accessAllowed: false });
+    });
+
+    it('con una clase suelta de hoy accessAllowed es true y entra sin excepción', async () => {
+      const member = await newMember();
+      await giveMembership(member.id, { planType: 'DROP_IN', startDays: 0, endDays: 0 });
+
+      expect((await lookup(member.memberCode as string)).body.data[0]).toMatchObject({
+        membershipStatus: 'ACTIVE',
+        accessAllowed: true,
+      });
+      const res = await checkIn(member.id);
+      expect(res.status).toBe(201);
+      expect(res.body.isException).toBe(false);
+    });
+
+    it('vencida sin motivo: 400 "Escribe el motivo para dejarlo pasar." y no registra el ingreso', async () => {
+      const member = await newMember();
+      await giveMembership(member.id, { startDays: -40, endDays: -11 });
+
+      const res = await checkIn(member.id);
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe('Escribe el motivo para dejarlo pasar.');
+      await expect(prisma.checkIn.count({ where: { memberId: member.id } })).resolves.toBe(0);
+    });
+
+    it('un motivo de solo espacios cuenta como sin motivo', async () => {
+      const member = await newMember();
+      const res = await checkIn(member.id, receptionToken, { exceptionReason: '    ' });
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe('Escribe el motivo para dejarlo pasar.');
+    });
+
+    it('vencida con motivo: 201 con isException y el motivo guardado junto al ingreso', async () => {
+      const member = await newMember();
+      await giveMembership(member.id, { startDays: -40, endDays: -11 });
+
+      const res = await checkIn(member.id, receptionToken, { exceptionReason: `  ${REASON}  ` });
+
+      expect(res.status).toBe(201);
+      expect(res.body).toMatchObject({ membershipStatus: 'EXPIRED', isException: true });
+      await expect(
+        prisma.checkIn.findUniqueOrThrow({ where: { id: res.body.checkInId } }),
+      ).resolves.toMatchObject({ isException: true, exceptionReason: REASON, membershipStatus: 'EXPIRED' });
+    });
+
+    it('400 con un motivo de menos de 5 o más de 200 caracteres', async () => {
+      const member = await newMember();
+      for (const exceptionReason of ['abcd', 'x'.repeat(201)]) {
+        const res = await checkIn(member.id, receptionToken, { exceptionReason });
+        expect(res.status).toBe(400);
+        expect(res.body.message).toEqual(['El motivo debe tener entre 5 y 200 caracteres.']);
+      }
+      await expect(prisma.checkIn.count({ where: { memberId: member.id } })).resolves.toBe(0);
+    });
+
+    it('con membresía Activa el motivo se ignora: no es excepción', async () => {
+      const member = await activeMember();
+      const res = await checkIn(member.id, receptionToken, { exceptionReason: REASON });
+      expect(res.status).toBe(201);
+      await expect(
+        prisma.checkIn.findUniqueOrThrow({ where: { id: res.body.checkInId } }),
+      ).resolves.toMatchObject({ isException: false, exceptionReason: null });
+    });
+
+    it('un miembro inexistente responde 404 aunque falte el motivo', async () => {
+      expect((await checkIn(randomUUID())).status).toBe(404);
     });
   });
 
