@@ -35,6 +35,7 @@ model GymClass {
 
   trainer      User               @relation(fields: [trainerId], references: [id], onDelete: Restrict)
   reservations ClassReservation[]
+  reviews      Review[]
 
   @@index([trainerId, startsAt])
   @@index([startsAt])

@@ -402,6 +402,8 @@ async function main() {
   await seedPersonalSessionPricing();
   await seedNotifications();
   await seedProgressEntries();
+  await seedRoutines();
+  await seedReviews();
 }
 
 async function seedPlans() {
@@ -957,6 +959,169 @@ async function seedProgressEntries() {
   });
 
   console.log('5 registros de progreso corporal cargados (H19)');
+}
+
+/**
+ * Rutinas de prueba (DB-18.1 / H18): una para Juan Perez y otra para Ana Gomez.
+ * Idempotente: solo se crean si la tabla `routines` está vacía.
+ */
+async function seedRoutines() {
+  if ((await prisma.routine.count()) > 0) return;
+
+  const trainer1 = await prisma.user.findUniqueOrThrow({ where: { email: 'entrenador@gymhub.test' } });
+  const trainer2 = await prisma.user.findUniqueOrThrow({ where: { email: 'entrenador2@gymhub.test' } });
+  const juan = await prisma.user.findUniqueOrThrow({ where: { email: 'miembro@gymhub.test' } });
+  const ana = await prisma.user.findUniqueOrThrow({ where: { email: 'ana.gomez@gymhub.test' } });
+
+  await prisma.routine.create({
+    data: {
+      name: 'Fuerza Base (prueba H18)',
+      trainerId: trainer1.id,
+      memberId: juan.id,
+      daysOfWeek: [1, 3, 5],
+      exercises: {
+        create: [
+          { sortOrder: 1, name: 'Sentadilla con barra', sets: 4, reps: 10, suggestedWeightKg: 60 },
+          { sortOrder: 2, name: 'Press de banca', sets: 4, reps: 8, suggestedWeightKg: 50 },
+          { sortOrder: 3, name: 'Remo con mancuerna', sets: 3, reps: 12, suggestedWeightKg: 20 },
+        ],
+      },
+    },
+  });
+
+  await prisma.routine.create({
+    data: {
+      name: 'Acondicionamiento (prueba H18)',
+      trainerId: trainer2.id,
+      memberId: ana.id,
+      daysOfWeek: [2, 4],
+      exercises: {
+        create: [
+          { sortOrder: 1, name: 'Peso muerto rumano', sets: 3, reps: 12, suggestedWeightKg: 35 },
+          { sortOrder: 2, name: 'Plancha abdominal', sets: 3, reps: 40, suggestedWeightKg: 0 },
+        ],
+      },
+    },
+  });
+
+    console.log('2 rutinas de prueba cargadas (H18)');
+}
+
+/**
+ * Datos de prueba para reseñas (DB-22.1 / H22):
+ *   - Clase pasada asistida por Juan Perez (pendiente por calificar en últimos 7 días).
+ *   - Clase pasada asistida y ya calificada por Juan Perez (5 estrellas).
+ *   - Sesión personal realizada (COMPLETED / COMPLETED) de Juan Perez (pendiente por calificar).
+ *   - Sesión personal realizada y ya calificada por Ana Gomez (4 estrellas).
+ * Idempotente: solo se crea si la tabla `reviews` está vacía.
+ */
+async function seedReviews() {
+  if ((await prisma.review.count()) > 0) return;
+
+  const juan = await prisma.user.findUniqueOrThrow({ where: { email: 'miembro@gymhub.test' } });
+  const ana = await prisma.user.findUniqueOrThrow({ where: { email: 'ana.gomez@gymhub.test' } });
+  const trainer1 = await prisma.user.findUniqueOrThrow({ where: { email: 'entrenador@gymhub.test' } });
+  const trainer2 = await prisma.user.findUniqueOrThrow({ where: { email: 'entrenador2@gymhub.test' } });
+  const today = gymTodayIso();
+
+  const localInstant = (daysOffset: number, hour: number) => {
+    const day = gymDate(today, daysOffset).toISOString().slice(0, 10);
+    return new Date(`${day}T${String(hour).padStart(2, '0')}:00:00.000-06:00`);
+  };
+
+  const reception = await prisma.user.findUniqueOrThrow({ where: { email: 'recepcion@gymhub.test' } });
+  const pendingStart = localInstant(-3, 7);
+  const pendingEnd = localInstant(-3, 8);
+  const pendingDay = gymDate(today, -3).toISOString().slice(0, 10);
+  const hasCheckInForPendingClass = await prisma.checkIn.count({
+    where: {
+      memberId: juan.id,
+      checkedInAt: {
+        gte: new Date(`${pendingDay}T00:00:00.000-06:00`),
+        lte: pendingEnd,
+      },
+    },
+  });
+  if (hasCheckInForPendingClass === 0) {
+    await prisma.checkIn.create({
+      data: {
+        memberId: juan.id,
+        checkedInAt: new Date(`${pendingDay}T06:30:00.000-06:00`),
+        membershipStatus: 'ACTIVE',
+        registeredById: reception.id,
+      },
+    });
+  }
+
+  const pendingClass = await prisma.gymClass.create({
+    data: {
+      name: 'Yoga Matutino (prueba H22)',
+      trainerId: trainer1.id,
+      startsAt: pendingStart,
+      endsAt: pendingEnd,
+      capacity: 15,
+      status: 'SCHEDULED',
+    },
+  });
+  await prisma.classReservation.create({
+    data: { classId: pendingClass.id, memberId: juan.id, status: 'CONFIRMED' },
+  });
+
+  const reviewedClass = await prisma.gymClass.create({
+    data: {
+      name: 'Spinning Tarde (prueba H22)',
+      trainerId: trainer2.id,
+      startsAt: localInstant(-2, 20),
+      endsAt: localInstant(-2, 21),
+      capacity: 20,
+      status: 'SCHEDULED',
+    },
+  });
+  await prisma.classReservation.create({
+    data: { classId: reviewedClass.id, memberId: juan.id, status: 'CONFIRMED' },
+  });
+
+  await prisma.personalSession.create({
+    data: {
+      trainerId: trainer1.id,
+      memberId: juan.id,
+      startsAt: localInstant(-1, 10),
+      endsAt: localInstant(-1, 11),
+      status: 'COMPLETED',
+      outcome: 'COMPLETED',
+      resultRecordedAt: localInstant(-1, 11),
+    },
+  });
+
+  const reviewedSession = await prisma.personalSession.create({
+    data: {
+      trainerId: trainer2.id,
+      memberId: ana.id,
+      startsAt: localInstant(-4, 15),
+      endsAt: localInstant(-4, 16),
+      status: 'COMPLETED',
+      outcome: 'COMPLETED',
+      resultRecordedAt: localInstant(-4, 16),
+    },
+  });
+
+  await prisma.review.createMany({
+    data: [
+      {
+        memberId: juan.id,
+        gymClassId: reviewedClass.id,
+        rating: 5,
+        comment: 'Excelente ritmo y energía.',
+      },
+      {
+        memberId: ana.id,
+        personalSessionId: reviewedSession.id,
+        rating: 4,
+        comment: 'Muy buen acompañamiento.',
+      },
+    ],
+  });
+  console.log('datos de prueba de reseñas (H22): 2 calificables pendientes y 2 reseñas guardadas');
 }
 
 try {

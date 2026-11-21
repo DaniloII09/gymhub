@@ -1,11 +1,16 @@
 import { Module } from '@nestjs/common';
-import { ProgressController } from '@Routines/controllers';
-import { ProgressRepository } from '@Routines/repositories';
-import { ProgressService } from '@Routines/services';
+import { ProgressController, RoutinesController } from '@Routines/controllers';
+import { ProgressRepository, RoutineRepository } from '@Routines/repositories';
+import { ProgressService, RoutinesService } from '@Routines/services';
 
-// Épica 6 · Progreso y evolución (H19). Dueño: Christian / Alexis Merino.
+// Épica 6 · Rutinas y progreso (H18 y H19). Dueño: Christian / Alexis Merino.
 @Module({
-  controllers: [ProgressController],
-  providers: [ProgressService, ProgressRepository],
+  controllers: [RoutinesController, ProgressController],
+  providers: [
+    RoutinesService,
+    RoutineRepository,
+    ProgressService,
+    ProgressRepository,
+  ],
 })
 export class RoutinesModule {}

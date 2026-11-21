@@ -36,6 +36,7 @@ model PersonalSession {
   trainer           User               @relation("TrainerPersonalSessions", fields: [trainerId], references: [id], onDelete: Restrict)
   member            User               @relation("MemberPersonalSessions", fields: [memberId], references: [id], onDelete: Restrict)
   availabilityBlock AvailabilityBlock? @relation(fields: [availabilityBlockId], references: [id], onDelete: SetNull)
+  reviews           Review[]
 
   @@index([trainerId, startsAt])
   @@index([memberId, startsAt])
