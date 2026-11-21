@@ -65,6 +65,8 @@ model User {
   notifications Notification[]
   expiryNotices ExpiryNotice[]
 
+  // Épica 6 · Progreso (H19): registros corporales del miembro.
+  progressEntries ProgressEntry[] @relation("MemberProgressEntries")
 
   // Épica 6 · Rutinas (H18): rutinas creadas como entrenador o asignadas como miembro.
   trainedRoutines  Routine[] @relation("TrainerRoutines")
@@ -72,7 +74,6 @@ model User {
 
   // Épica 8 · Reseñas (H22): reseñas escritas por este miembro.
   reviews Review[] @relation("MemberReviews")
-
 
   // NOTA PARA EL EQUIPO: cuando tu modelo referencie a User (ej. Membership.member,
   // GroupClass.trainer), agregá acá la relación opuesta. Este archivo tiene

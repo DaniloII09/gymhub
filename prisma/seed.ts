@@ -401,11 +401,9 @@ async function main() {
   await seedPastClasses();
   await seedPersonalSessionPricing();
   await seedNotifications();
-
+  await seedProgressEntries();
   await seedRoutines();
-
   await seedReviews();
-
 }
 
 async function seedPlans() {
@@ -905,6 +903,65 @@ async function seedNotifications() {
 }
 
 /**
+ * Registros de progreso corporal de prueba (DB-19.1 / H19).
+ * Idempotente: solo se cargan si la tabla `progress_entries` está vacía.
+ */
+async function seedProgressEntries() {
+  if ((await prisma.progressEntry.count()) > 0) return;
+
+  const juan = await prisma.user.findUniqueOrThrow({ where: { email: 'miembro@gymhub.test' } });
+  const ana = await prisma.user.findUniqueOrThrow({ where: { email: 'ana.gomez@gymhub.test' } });
+  const today = gymTodayIso();
+
+  await prisma.progressEntry.createMany({
+    data: [
+      {
+        memberId: juan.id,
+        recordedAt: gymDate(today, -30),
+        weightKg: 76.0,
+        chestCm: 98.0,
+        waistCm: 84.0,
+        armCm: 34.0,
+      },
+      {
+        memberId: juan.id,
+        recordedAt: gymDate(today, -15),
+        weightKg: 74.2,
+        chestCm: 98.5,
+        waistCm: 82.0,
+        armCm: 34.3,
+      },
+      {
+        memberId: juan.id,
+        recordedAt: gymDate(today, -2),
+        weightKg: 72.5,
+        chestCm: 99.0,
+        waistCm: 80.5,
+        armCm: 34.8,
+      },
+      {
+        memberId: ana.id,
+        recordedAt: gymDate(today, -20),
+        weightKg: 62.0,
+        chestCm: 88.0,
+        waistCm: 70.0,
+        armCm: 28.0,
+      },
+      {
+        memberId: ana.id,
+        recordedAt: gymDate(today, -3),
+        weightKg: 60.8,
+        chestCm: 88.5,
+        waistCm: 68.5,
+        armCm: 28.4,
+      },
+    ],
+  });
+
+  console.log('5 registros de progreso corporal cargados (H19)');
+}
+
+/**
  * Rutinas de prueba (DB-18.1 / H18): una para Juan Perez y otra para Ana Gomez.
  * Idempotente: solo se crean si la tabla `routines` está vacía.
  */
@@ -1065,7 +1122,6 @@ async function seedReviews() {
     ],
   });
   console.log('datos de prueba de reseñas (H22): 2 calificables pendientes y 2 reseñas guardadas');
-
 }
 
 try {
