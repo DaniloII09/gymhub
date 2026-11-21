@@ -12,8 +12,8 @@ Plataforma web para digitalizar la operación de un gimnasio: venta y control de
 
 | Componente | URL |
 | --- | --- |
-| Frontend | [https://PENDIENTE.vercel.app] |
-| Documentación de la API (Swagger) | [https://PENDIENTE.onrender.com/api/docs] |
+| Frontend | https://gymhub-frontend-gilt.vercel.app/home |
+| Documentación de la API (Swagger) | https://gymhub-api-6c9o.onrender.com |
 
 Los usuarios de prueba se entregan en Moodle, no en este repositorio.
 
