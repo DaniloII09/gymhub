@@ -11,6 +11,7 @@ rol, 401 sin sesión).
 |---|---|---|
 | GET | `/api/v1/reports/occupancy?from=2026-09-01&to=2026-11-30` | BE-28.1 |
 | GET | `/api/v1/reports/income?from=2026-09-01&to=2026-11-30` | BE-29.1 |
+| GET | `/api/v1/reports/ratings?from=2026-09-01&to=2026-11-30` | BE-23.1 |
 
 ## Rango de fechas (compartido con H28)
 
