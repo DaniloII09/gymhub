@@ -20,19 +20,29 @@ export class AvailabilityBlocksService {
       throw new BadRequestException('startTime debe ser anterior a endTime');
     }
 
+    const [startHours, startMinutes] = dto.startTime.split(':').map(Number);
+    const [endHours, endMinutes] = dto.endTime.split(':').map(Number);
+    const startTotalMinutes = startHours * 60 + startMinutes;
+    const endTotalMinutes = endHours * 60 + endMinutes;
+    const durationMinutes = endTotalMinutes - startTotalMinutes;
+
+    if (durationMinutes < 60) {
+      throw new BadRequestException('El bloque debe durar al menos 60 minutos.');
+    }
+
     const existingBlocks = await this.repository.findByTrainerAndWeekday(
       userId,
       dto.weekday,
     );
 
     // Validación de traslape / cruce de horario: (StartA < EndB) && (EndA > StartB)
-    const hasOverlap = existingBlocks.some(
+    const conflictingBlock = existingBlocks.find(
       (block) => dto.startTime < block.endTime && dto.endTime > block.startTime,
     );
 
-    if (hasOverlap) {
+    if (conflictingBlock) {
       throw new ConflictException(
-        new AvailabilityBlockConflictError().message,
+        new AvailabilityBlockConflictError(conflictingBlock).message,
       );
     }
 
