@@ -401,7 +401,11 @@ async function main() {
   await seedPastClasses();
   await seedPersonalSessionPricing();
   await seedNotifications();
+
+  await seedRoutines();
+
   await seedReviews();
+
 }
 
 async function seedPlans() {
@@ -901,6 +905,52 @@ async function seedNotifications() {
 }
 
 /**
+ * Rutinas de prueba (DB-18.1 / H18): una para Juan Perez y otra para Ana Gomez.
+ * Idempotente: solo se crean si la tabla `routines` está vacía.
+ */
+async function seedRoutines() {
+  if ((await prisma.routine.count()) > 0) return;
+
+  const trainer1 = await prisma.user.findUniqueOrThrow({ where: { email: 'entrenador@gymhub.test' } });
+  const trainer2 = await prisma.user.findUniqueOrThrow({ where: { email: 'entrenador2@gymhub.test' } });
+  const juan = await prisma.user.findUniqueOrThrow({ where: { email: 'miembro@gymhub.test' } });
+  const ana = await prisma.user.findUniqueOrThrow({ where: { email: 'ana.gomez@gymhub.test' } });
+
+  await prisma.routine.create({
+    data: {
+      name: 'Fuerza Base (prueba H18)',
+      trainerId: trainer1.id,
+      memberId: juan.id,
+      daysOfWeek: [1, 3, 5],
+      exercises: {
+        create: [
+          { sortOrder: 1, name: 'Sentadilla con barra', sets: 4, reps: 10, suggestedWeightKg: 60 },
+          { sortOrder: 2, name: 'Press de banca', sets: 4, reps: 8, suggestedWeightKg: 50 },
+          { sortOrder: 3, name: 'Remo con mancuerna', sets: 3, reps: 12, suggestedWeightKg: 20 },
+        ],
+      },
+    },
+  });
+
+  await prisma.routine.create({
+    data: {
+      name: 'Acondicionamiento (prueba H18)',
+      trainerId: trainer2.id,
+      memberId: ana.id,
+      daysOfWeek: [2, 4],
+      exercises: {
+        create: [
+          { sortOrder: 1, name: 'Peso muerto rumano', sets: 3, reps: 12, suggestedWeightKg: 35 },
+          { sortOrder: 2, name: 'Plancha abdominal', sets: 3, reps: 40, suggestedWeightKg: 0 },
+        ],
+      },
+    },
+  });
+
+    console.log('2 rutinas de prueba cargadas (H18)');
+}
+
+/**
  * Datos de prueba para reseñas (DB-22.1 / H22):
  *   - Clase pasada asistida por Juan Perez (pendiente por calificar en últimos 7 días).
  *   - Clase pasada asistida y ya calificada por Juan Perez (5 estrellas).
@@ -1015,6 +1065,7 @@ async function seedReviews() {
     ],
   });
   console.log('datos de prueba de reseñas (H22): 2 calificables pendientes y 2 reseñas guardadas');
+
 }
 
 try {

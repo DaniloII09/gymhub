@@ -1,7 +1,11 @@
 import { Module } from '@nestjs/common';
+import { RoutinesController } from '@Routines/controllers';
+import { RoutineRepository } from '@Routines/repositories';
+import { RoutinesService } from '@Routines/services';
 
-// Épica 6 · Rutinas y progreso. Dueño: Christian.
-// Esqueleto. Agregá controllers/, services/, repositories/ y dto/ a medida que
-// los creés, y declaralos acá. Usá el módulo de usuarios como referencia.
-@Module({})
+// Épica 6 · Rutinas y progreso (H18). Dueño: Christian / Alexis Merino.
+@Module({
+  controllers: [RoutinesController],
+  providers: [RoutinesService, RoutineRepository],
+})
 export class RoutinesModule {}
