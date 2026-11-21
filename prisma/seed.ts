@@ -217,6 +217,71 @@ const GYM_CLASSES = [
 ] as const;
 
 /**
+ * Clases ya terminadas para el reporte de ocupación (H28), con
+ * entrenador2@gymhub.test. Cada clase dice cuántas reservas confirmadas tiene
+ * (de los 3 miembros de prueba, así que como máximo 3). Son 7 nombres, para
+ * que el reporte resalte 3 de mayor y 3 de menor ocupación, y Boxeo Fitness y
+ * Yoga Flow empatan en 50.0 % para ver el desempate por nombre. La clase
+ * cancelada y la reserva cancelada no cuentan.
+ */
+const OCCUPANCY_MEMBER_EMAILS = [
+  "miembro@gymhub.test",
+  "ana.gomez@gymhub.test",
+  "luis.martinez@gymhub.test",
+] as const;
+const PAST_CLASSES = [
+  {
+    name: "CrossFit Funcional",
+    daysAgo: 6,
+    hour: 18,
+    capacity: 3,
+    confirmed: 3,
+  },
+  {
+    name: "Spinning Matutino",
+    daysAgo: 20,
+    hour: 7,
+    capacity: 4,
+    confirmed: 3,
+  },
+  {
+    name: "Spinning Matutino",
+    daysAgo: 13,
+    hour: 7,
+    capacity: 4,
+    confirmed: 3,
+  },
+  { name: "Zumba Ritmos", daysAgo: 9, hour: 17, capacity: 3, confirmed: 2 },
+  { name: "Boxeo Fitness", daysAgo: 11, hour: 17, capacity: 4, confirmed: 2 },
+  {
+    name: "Yoga Flow",
+    daysAgo: 27,
+    hour: 9,
+    capacity: 5,
+    confirmed: 3,
+  },
+  {
+    name: "Yoga Flow",
+    daysAgo: 4,
+    hour: 9,
+    capacity: 5,
+    confirmed: 2,
+    // luis.martinez reservó y canceló: no suma.
+    cancelledReservation: true,
+  },
+  { name: "Pilates Core", daysAgo: 15, hour: 8, capacity: 6, confirmed: 1 },
+  { name: "HIIT Nocturno", daysAgo: 8, hour: 19, capacity: 10, confirmed: 1 },
+  {
+    name: "Spinning Matutino",
+    daysAgo: 6,
+    hour: 7,
+    capacity: 4,
+    confirmed: 0,
+    cancelled: true,
+  },
+] as const;
+
+/**
  * Avisos de prueba (DB-24.1 / H24): 3 avisos para miembro@gymhub.test, uno
  * leído, para ver la bandeja y el contador de H25 sin disparar otros módulos.
  * Se identifican por miembro y título para no duplicarlos.
@@ -333,6 +398,7 @@ async function main() {
   await seedCharges();
   await seedIncomeReceipts();
   await seedGymClasses();
+  await seedPastClasses();
   await seedPersonalSessionPricing();
   await seedNotifications();
   await seedProgressEntries();
@@ -705,6 +771,86 @@ async function seedGymClasses() {
  * (`SEED_PERSONAL_SESSION_PRICE` o `PERSONAL_SESSION_PRICE`); si negocio aún no
  * definió la tarifa oficial, no inventa ningún monto silenciosamente.
  */
+
+async function seedPastClasses() {
+  const trainer = await prisma.user.findUniqueOrThrow({
+    where: { email: "entrenador2@gymhub.test" },
+  });
+  const now = new Date();
+  // Se cargan una sola vez: si el entrenador ya tiene clases terminadas con
+  // estos nombres, no se duplican.
+  const exists = await prisma.gymClass.count({
+    where: {
+      trainerId: trainer.id,
+      endsAt: { lt: now },
+      name: { in: PAST_CLASSES.map((item) => item.name) },
+    },
+  });
+  if (exists) {
+    console.log(
+      `${PAST_CLASSES.length} clases terminadas para el reporte de ocupación (H28), ya existían`,
+    );
+    return;
+  }
+
+  const members = await Promise.all(
+    OCCUPANCY_MEMBER_EMAILS.map((email) =>
+      prisma.user.findUniqueOrThrow({ where: { email } }),
+    ),
+  );
+
+  for (const item of PAST_CLASSES) {
+    // La hora es la de El Salvador (UTC-6), por eso se suman 6 horas en UTC.
+    const startsAt = new Date(
+      Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate() - item.daysAgo,
+        item.hour + 6,
+        0,
+        0,
+        0,
+      ),
+    );
+    const endsAt = new Date(startsAt.getTime() + 60 * 60_000);
+    const cancelled = "cancelled" in item && item.cancelled;
+    const gymClass = await prisma.gymClass.create({
+      data: {
+        name: item.name,
+        trainerId: trainer.id,
+        startsAt,
+        endsAt,
+        capacity: item.capacity,
+        status: cancelled ? "CANCELLED" : "SCHEDULED",
+        cancellationReason: cancelled
+          ? "Clase de prueba cancelada (H28)"
+          : null,
+        createdAt: new Date(startsAt.getTime() - 7 * 24 * 60 * 60_000),
+      },
+    });
+
+    for (const member of members.slice(0, item.confirmed)) {
+      await prisma.classReservation.create({
+        data: { classId: gymClass.id, memberId: member.id },
+      });
+    }
+    if ("cancelledReservation" in item && item.cancelledReservation) {
+      await prisma.classReservation.create({
+        data: {
+          classId: gymClass.id,
+          // El tercer miembro no tiene reserva confirmada en esta clase.
+          memberId: members[2].id,
+          status: "CANCELLED",
+          cancelledAt: new Date(startsAt.getTime() - 24 * 60 * 60_000),
+        },
+      });
+    }
+  }
+  console.log(
+    `${PAST_CLASSES.length} clases terminadas para el reporte de ocupación (H28)`,
+  );
+}
+
 async function seedPersonalSessionPricing() {
   const rawPrice =
     process.env.SEED_PERSONAL_SESSION_PRICE ?? process.env.PERSONAL_SESSION_PRICE;
