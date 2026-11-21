@@ -1,0 +1,33 @@
+// Épica 4 · Check-in. Dueño: Danilo (DB-13.1).
+// IDs: Int autoincrement para el dominio; los usuarios usan UUID.
+
+/// Ingreso de un miembro al gimnasio (H13). El registro de accesos es
+/// permanente: no se borra.
+///
+/// `membershipStatus` es una foto del estado de la membresía en el momento del
+/// ingreso (ACTIVE, PENDING_PAYMENT, EXPIRED o NONE, como el contrato
+/// MEMBERSHIP_STATUS_SERVICE), para que el historial no cambie si el miembro
+/// renueva después.
+///
+/// Restricciones a mano en la migración DB-13.1:
+///   - CHECK membership_status en los 4 valores del contrato.
+///   - CHECK exception_reason no vacío cuando is_exception es true (H14).
+model CheckIn {
+  id               Int      @id @default(autoincrement())
+  memberId         String   @map("member_id") @db.Uuid
+  /// Hora del servidor.
+  checkedInAt      DateTime @default(now()) @map("checked_in_at")
+  membershipStatus String   @map("membership_status") @db.VarChar(20)
+  /// H14: recepción dejó pasar a un miembro sin membresía vigente.
+  isException      Boolean  @default(false) @map("is_exception")
+  exceptionReason  String?  @map("exception_reason") @db.VarChar(200)
+  /// Recepción o administrador que registró el ingreso.
+  registeredById   String   @map("registered_by_id") @db.Uuid
+
+  member       User @relation("MemberCheckIns", fields: [memberId], references: [id], onDelete: Restrict)
+  registeredBy User @relation("CheckInsRegistered", fields: [registeredById], references: [id], onDelete: Restrict)
+
+  @@index([memberId, checkedInAt])
+  @@index([checkedInAt])
+  @@map("check_ins")
+}

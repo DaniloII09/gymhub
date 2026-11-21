@@ -1,0 +1,18 @@
+// Configuración de Prisma. Enums y modelos viven en los archivos por módulo.
+// Cada dueño de módulo (opción 1) agrega SUS tablas en su propio archivo.
+
+generator client {
+  provider = "prisma-client"
+
+  // La ruta sube dos niveles porque el schema vive en prisma/schema/.
+  output                 = "../../src/generated/prisma"
+  engineType             = "client"
+  runtime                = "nodejs"
+  moduleFormat           = "esm"
+  generatedFileExtension = "ts"
+  importFileExtension    = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}

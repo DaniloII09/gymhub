@@ -1,0 +1,3 @@
+# Danilo revisa el schema compartido y los contratos cross-module.
+/prisma/schema/users.prisma   @DaniloII09
+/src/common/contracts/        @DaniloII09

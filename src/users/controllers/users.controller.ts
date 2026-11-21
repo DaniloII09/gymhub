@@ -1,30 +1,26 @@
-import { Body, Controller, Post } from '@nestjs/common';
-import {
-  ApiConflictResponse,
-  ApiCreatedResponse,
-  ApiOperation,
-  ApiTags,
-} from '@nestjs/swagger';
-import { Public } from '@Auth/decorators';
+import { Body, Controller, Param, ParseUUIDPipe, Patch } from '@nestjs/common';
+import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { CurrentUser, Roles } from '@Auth/decorators';
 import { UsersService } from '@Users/services';
-import { CreateUserDto, UserResponseDto } from '@Users/dto';
+import { UpdateUserStatusDto } from '@Users/dto';
+import type { User } from '@PrismaClient';
 
 @ApiTags('users')
+@ApiBearerAuth()
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  /**
-   * Registro. Crear un usuario es crear un recurso, así que es un POST a la
-   * colección `/users` y responde 201 (el default de Nest para POST).
-   */
-  @Public()
-  @Post()
-  @ApiOperation({ summary: 'Registra un nuevo usuario' })
-  @ApiCreatedResponse({ type: UserResponseDto })
-  @ApiConflictResponse({ description: 'El nombre de usuario ya está en uso.' })
-  async create(@Body() dto: CreateUserDto): Promise<UserResponseDto> {
-    const user = await this.usersService.create(dto);
-    return UserResponseDto.fromEntity(user);
+  @Roles('ADMIN')
+  @Patch(':userId/status')
+  @ApiOperation({ summary: 'Activa o desactiva una cuenta (Administrador)' })
+  @ApiOkResponse({ description: 'Estado actualizado.' })
+  async setStatus(
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Body() dto: UpdateUserStatusDto,
+    @CurrentUser() actor: User,
+  ): Promise<{ id: string; isActive: boolean }> {
+    const user = await this.usersService.setActive(userId, dto.isActive, actor.id);
+    return { id: user.id, isActive: user.isActive };
   }
 }

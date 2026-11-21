@@ -14,6 +14,10 @@ export interface EnvConfig {
   JWT_EXPIRES_IN: string;
   REFRESH_TOKEN_EXPIRES_IN_DAYS: number;
   BCRYPT_SALT_ROUNDS: number;
+  /** Precio opcional de la sesión personal (DB-11.1 / H11) si se configura por entorno. */
+  PERSONAL_SESSION_PRICE: number | null;
+  /** Orígenes permitidos por CORS, separados por coma (URL del frontend desplegado). */
+  FRONTEND_URL: string[];
 }
 
 const requiredVars = ['DATABASE_URL', 'JWT_SECRET'] as const;
@@ -53,6 +57,22 @@ function readInt(
   return parsed;
 }
 
+function readOptionalPositiveNumber(
+  raw: Record<string, unknown>,
+  key: string,
+): number | null {
+  const value = raw[key];
+  if (value === undefined || value === '') return null;
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(
+      `La variable de entorno ${key} debe ser un número positivo.`,
+    );
+  }
+  return Math.round(parsed * 100) / 100;
+}
+
 export function validateEnv(raw: Record<string, unknown>): EnvConfig {
   const missing = requiredVars.filter((key) => !raw[key]);
   if (missing.length > 0) {
@@ -77,5 +97,10 @@ export function validateEnv(raw: Record<string, unknown>): EnvConfig {
     JWT_EXPIRES_IN: readString(raw, 'JWT_EXPIRES_IN', '15m'),
     REFRESH_TOKEN_EXPIRES_IN_DAYS: readInt(raw, 'REFRESH_TOKEN_EXPIRES_IN_DAYS', 7),
     BCRYPT_SALT_ROUNDS: readInt(raw, 'BCRYPT_SALT_ROUNDS', 12),
+    PERSONAL_SESSION_PRICE: readOptionalPositiveNumber(raw, 'PERSONAL_SESSION_PRICE'),
+    FRONTEND_URL: readString(raw, 'FRONTEND_URL', 'http://localhost:3001')
+      .split(',')
+      .map((origin) => origin.trim().replace(/\/$/, ''))
+      .filter((origin) => origin.length > 0),
   };
 }

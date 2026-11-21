@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, Patch } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiNoContentResponse,
@@ -8,8 +8,8 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { AuthService } from '@Auth/services';
-import { CurrentUser, Public } from '@Auth/decorators';
-import { AuthResponseDto, LoginDto, RefreshTokenDto } from '@Auth/dto';
+import { CurrentUser, Public, AllowPasswordChangePending } from '@Auth/decorators';
+import { AuthResponseDto, LoginDto, RefreshTokenDto, ChangePasswordDto } from '@Auth/dto';
 import { UserResponseDto } from '@Users/dto';
 import type { User } from '@PrismaClient';
 
@@ -57,6 +57,7 @@ export class AuthController {
   }
 
   /** Usuario autenticado. Protegido por el guard global. */
+  @AllowPasswordChangePending()
   @Get('me')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Devuelve el usuario autenticado' })
@@ -64,5 +65,18 @@ export class AuthController {
   @ApiUnauthorizedResponse({ description: 'Token ausente, inválido o expirado.' })
   me(@CurrentUser() user: User): UserResponseDto {
     return UserResponseDto.fromEntity(user);
+  }
+
+  @AllowPasswordChangePending()
+  @Patch('password')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Cambia la contraseña del usuario autenticado' })
+  @ApiNoContentResponse({ description: 'Contraseña actualizada.' })
+  async changePassword(
+    @CurrentUser() user: User,
+    @Body() dto: ChangePasswordDto,
+  ): Promise<void> {
+    await this.authService.changePassword(user, dto);
   }
 }

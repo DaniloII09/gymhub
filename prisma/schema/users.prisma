@@ -1,0 +1,97 @@
+// Módulo 0 · Usuarios y autenticación. Base del boilerplate + rol.
+// Dueño del archivo: lo revisa Danilo. Solo se agrega lo imprescindible para
+// el control de acceso (el campo `role`). Los datos de perfil del miembro
+// (nombre, sexo, fecha de nacimiento, código, etc.) los agrega H01 en su rama. 
+
+enum Role {
+  MEMBER
+  TRAINER
+  RECEPTION
+  ADMIN
+}
+
+enum Sex { 
+  M 
+  F 
+}
+
+model User {
+  id        String    @id @default(uuid()) @db.Uuid
+  fullName  String    @db.VarChar(100)
+  sex       Sex?
+  birthDate DateTime? @db.Date
+  email     String    @unique
+
+  passwordHash       String    @map("password_hash")
+  mustChangePassword Boolean   @default(false)
+  role               Role      @default(MEMBER)
+  isActive           Boolean   @default(true) @map("is_active")
+  enrolledAt         DateTime? @db.Date
+  memberCode         String?   @unique @db.VarChar(10)
+
+  createdById String?  @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  refreshTokens RefreshToken[]
+
+  // Épica 7 · Máquinas (H20): cambios de estado que registró este usuario.
+  machineStatusChanges MachineStatusChange[]
+
+  // Épica 5 · Pagos (H15): cobros de este miembro y pagos que registró.
+  charges            Charge[]  @relation("ChargeMember")
+  registeredPayments Payment[] @relation("PaymentRegisteredBy")
+  // Épica 3 · Agenda de entrenadores personales (H10): bloques de disponibilidad.
+  availabilityBlocks AvailabilityBlock[]
+
+  // Épica 2 · Clases grupales (H06 / H07): clases grupales asignadas a este entrenador y reservas de este miembro.
+  trainedClasses    GymClass[]
+  classReservations ClassReservation[] @relation("MemberClassReservations")
+
+  // Épica 3 · Sesiones personales (H11): sesiones personales como entrenador o como miembro.
+  trainerPersonalSessions      PersonalSession[]        @relation("TrainerPersonalSessions")
+  memberPersonalSessions       PersonalSession[]        @relation("MemberPersonalSessions")
+  updatedSessionPricingConfigs PersonalSessionPricing[] @relation("PersonalSessionPricingUpdatedBy")
+
+  // Épica 1 · Membresías (H04): membresías de este miembro y las que vendió.
+  memberships     Membership[] @relation("MemberMemberships")
+  soldMemberships Membership[] @relation("MembershipsSold")
+
+  // Épica 4 · Check-in (H13): ingresos de este miembro y los que registró.
+  checkIns           CheckIn[] @relation("MemberCheckIns")
+  registeredCheckIns CheckIn[] @relation("CheckInsRegistered")
+
+  // Épica 9 · Notificaciones (H24): avisos que recibió este usuario.
+  notifications Notification[]
+  expiryNotices ExpiryNotice[]
+
+  // Épica 6 · Progreso (H19): registros corporales del miembro.
+  progressEntries ProgressEntry[] @relation("MemberProgressEntries")
+
+  // Épica 6 · Rutinas (H18): rutinas creadas como entrenador o asignadas como miembro.
+  trainedRoutines  Routine[] @relation("TrainerRoutines")
+  assignedRoutines Routine[] @relation("MemberRoutines")
+
+  // Épica 8 · Reseñas (H22): reseñas escritas por este miembro.
+  reviews Review[] @relation("MemberReviews")
+
+  // NOTA PARA EL EQUIPO: cuando tu modelo referencie a User (ej. Membership.member,
+  // GroupClass.trainer), agregá acá la relación opuesta. Este archivo tiene
+  // CODEOWNER = Danilo, así que ese cambio pasa por su revisión.
+
+  @@index([role])
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  userId    String    @map("user_id") @db.Uuid
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}

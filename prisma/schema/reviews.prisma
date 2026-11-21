@@ -1,0 +1,31 @@
+// Épica 8 · Reseñas. Dueño: Christian (DB-22.1).
+// Agregá acá los modelos de tu módulo en tu feat branch. Si referencian a
+// User, agregá la relación opuesta en users.prisma (revisión de Danilo).
+// IDs: Int autoincrement para el dominio; los usuarios usan UUID.
+
+/// Calificación de un miembro sobre una clase grupal o una sesión personal (H22).
+/// Restricciones agregadas a mano en la migración DB-22.1:
+///   - CHECK rating BETWEEN 1 AND 5.
+///   - CHECK exactamente uno de gym_class_id o personal_session_id no es nulo.
+///   - Unicidad por (member_id, gym_class_id) y por (member_id, personal_session_id).
+model Review {
+  id                Int      @id @default(autoincrement())
+  memberId          String   @map("member_id") @db.Uuid
+  gymClassId        Int?     @map("gym_class_id")
+  personalSessionId Int?     @map("personal_session_id")
+  rating            Int
+  comment           String?  @db.VarChar(500)
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  member          User             @relation("MemberReviews", fields: [memberId], references: [id], onDelete: Restrict)
+  gymClass        GymClass?        @relation(fields: [gymClassId], references: [id], onDelete: Restrict)
+  personalSession PersonalSession? @relation(fields: [personalSessionId], references: [id], onDelete: Restrict)
+
+  @@unique([memberId, gymClassId])
+  @@unique([memberId, personalSessionId])
+  @@index([createdAt])
+  @@index([gymClassId])
+  @@index([personalSessionId])
+  @@map("reviews")
+}

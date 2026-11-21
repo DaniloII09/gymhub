@@ -5,7 +5,7 @@ import { defineConfig, env } from 'prisma/config';
 // El runtime de la aplicación no pasa por acá: la conexión se arma en
 // src/prisma/prisma.service.ts con el driver adapter PrismaPg.
 export default defineConfig({
-  schema: 'prisma/schema.prisma',
+  schema: 'prisma/schema',
   migrations: {
     path: 'prisma/migrations',
     seed: 'tsx prisma/seed.ts',

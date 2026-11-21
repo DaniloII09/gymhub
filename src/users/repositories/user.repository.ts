@@ -6,9 +6,22 @@ import { Prisma, type User } from '@PrismaClient';
 /** Código de Prisma para violación de restricción única. */
 const UNIQUE_CONSTRAINT_VIOLATION = 'P2002';
 
-export interface CreateUserData {
+export interface CreateMemberData {
+  fullName: string;
+  sex: 'M' | 'F';
+  birthDate: Date;
   email: string;
   passwordHash: string;
+  memberCode: string;
+  createdById: string;
+}
+
+export interface CreateStaffData {
+  fullName: string;
+  email: string;
+  role: 'TRAINER' | 'RECEPTION' | 'ADMIN';
+  passwordHash: string;
+  createdById: string;
 }
 
 /**
@@ -31,21 +44,6 @@ export class UserRepository {
    * insert. El código P2002 de Prisma se traduce a un error de dominio para
    * que la capa de servicio no tenga que conocer los códigos del ORM.
    */
-  async create({ email, passwordHash }: CreateUserData): Promise<User> {
-    try {
-      return await this.prisma.user.create({
-        data: { email: this.normalizeEmail(email), passwordHash },
-      });
-    } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === UNIQUE_CONSTRAINT_VIOLATION
-      ) {
-        throw new EmailAlreadyTakenError(email);
-      }
-      throw error;
-    }
-  }
 
   findById(id: string): Promise<User | null> {
     return this.prisma.user.findUnique({ where: { id } });
@@ -87,4 +85,125 @@ export class UserRepository {
   private normalizeEmail(email: string): string {
     return email.trim().toLowerCase();
   }
+
+  /**
+   * @throws {EmailAlreadyTakenError} si el email ya existe.
+   * El rol MEMBER y mustChangePassword los fija el servidor, no el llamador.
+   */
+  async createMember(data: CreateMemberData): Promise<User> {
+    try {
+      return await this.prisma.user.create({
+        data: {
+          email: this.normalizeEmail(data.email),
+          passwordHash: data.passwordHash,
+          fullName: data.fullName,
+          sex: data.sex,
+          birthDate: data.birthDate,
+          role: 'MEMBER',
+          memberCode: data.memberCode,
+          enrolledAt: new Date(),
+          mustChangePassword: true,
+          createdById: data.createdById,
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === UNIQUE_CONSTRAINT_VIOLATION
+      ) {
+        throw new EmailAlreadyTakenError(data.email);
+      }
+      throw error;
+    }
+  }
+
+  /** Consume la secuencia member_code_seq y arma el código GYM-000000. */
+  async nextMemberCode(): Promise<string> {
+    const rows = await this.prisma.$queryRaw<Array<{ nextval: bigint }>>`
+      SELECT nextval('member_code_seq')
+    `;
+    return `GYM-${String(rows[0].nextval).padStart(6, '0')}`;
+  }
+
+  /**
+   * Miembros activos por código exacto o parte del nombre, sin distinguir
+   * mayúsculas (H04 y H13). Máximo `limit`, ordenados por nombre.
+   */
+  searchMembers(term: string, limit = 10): Promise<User[]> {
+    return this.prisma.user.findMany({
+      where: {
+        role: 'MEMBER',
+        isActive: true,
+        OR: [
+          { memberCode: { equals: term, mode: 'insensitive' } },
+          { fullName: { contains: term, mode: 'insensitive' } },
+        ],
+      },
+      orderBy: { fullName: 'asc' },
+      take: limit,
+    });
+  }
+  /**
+   * Cambia la contraseña y apaga mustChangePassword, revocando todas las
+   * sesiones del usuario, en una sola transacción. Toca refresh_tokens a
+   * propósito acá para que el cambio sea atómico (BE-1.2).
+   */
+  async changePassword(userId: string, passwordHash: string): Promise<void> {
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: userId },
+        data: { passwordHash, mustChangePassword: false },
+      }),
+      this.prisma.refreshToken.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+  }
+
+    /** @throws {EmailAlreadyTakenError} si el email ya existe. */
+  async createStaff(data: CreateStaffData): Promise<User> {
+    try {
+      return await this.prisma.user.create({
+        data: {
+          email: this.normalizeEmail(data.email),
+          passwordHash: data.passwordHash,
+          fullName: data.fullName,
+          role: data.role,
+          mustChangePassword: true,
+          createdById: data.createdById,
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === UNIQUE_CONSTRAINT_VIOLATION
+      ) {
+        throw new EmailAlreadyTakenError(data.email);
+      }
+      throw error;
+    }
+  }
+
+  /** Lista el personal (todo rol menos MEMBER), ordenado por nombre. */
+  async listStaff(skip: number, take: number): Promise<{ items: User[]; total: number }> {
+    const where = { role: { not: 'MEMBER' as const } };
+    const [items, total] = await this.prisma.$transaction([
+      this.prisma.user.findMany({ where, orderBy: { fullName: 'asc' }, skip, take }),
+      this.prisma.user.count({ where }),
+    ]);
+    return { items, total };
+  }
+
+  /** Desactiva y revoca todas las sesiones del usuario, en una transacción. */
+  async deactivate(userId: string): Promise<User> {
+    const [user] = await this.prisma.$transaction([
+      this.prisma.user.update({ where: { id: userId }, data: { isActive: false } }),
+      this.prisma.refreshToken.updateMany({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+    return user;
+  } 
 }
