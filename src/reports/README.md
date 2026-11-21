@@ -1,5 +1,6 @@
 # Épica 10 · Reportes y analítica para administración
 
+**H28: Ver la ocupación de las clases.** Dueño: Jaime.
 **H29: Ver los ingresos de un periodo.** Dueño: Jaime.
 
 El módulo no tiene tablas propias: cada reporte consulta los datos de otros
@@ -8,12 +9,14 @@ rol, 401 sin sesión).
 
 | Método | Ruta | Task |
 |---|---|---|
+| GET | `/api/v1/reports/occupancy?from=2026-09-01&to=2026-11-30` | BE-28.1 |
 | GET | `/api/v1/reports/income?from=2026-09-01&to=2026-11-30` | BE-29.1 |
 | GET | `/api/v1/reports/ratings?from=2026-09-01&to=2026-11-30` | BE-23.1 |
 
 ## Rango de fechas (compartido con H28)
 
-`services/report-range.ts` tiene las reglas que usan todos los reportes:
+`services/report-range.ts` tiene las reglas que usan todos los reportes, y
+`dto/report-range-query.dto.ts` la query `?from=&to=` que comparten:
 
 - `from` y `to` son fechas solo-día `AAAA-MM-DD` del calendario del gimnasio,
   las dos incluidas. Otro formato o un parámetro faltante responde 400 "Las
@@ -25,6 +28,42 @@ rol, 401 sin sesión).
 - **Hasta 12 meses:** `to` tiene que ser anterior a la misma fecha del año
   siguiente. Del 2026-01-01 al 2026-12-31 sí; del 2026-01-01 al 2027-01-01
   responde 400 "El rango no puede ser mayor a 12 meses.".
+
+## Ocupación de las clases (`GET /reports/occupancy`)
+
+Suma las **clases grupales** y sus **reservas** (tablas `gym_classes` y
+`class_reservations`, H06 y H07), agrupadas por el nombre de la clase.
+
+```json
+{
+  "from": "2026-09-01",
+  "to": "2026-11-20",
+  "totals": { "classCount": 7, "sessions": 9, "capacity": 44, "confirmedReservations": 20, "occupancyPercent": 45.5 },
+  "classes": [
+    { "name": "CrossFit Funcional", "sessions": 1, "capacity": 3, "confirmedReservations": 3, "occupancyPercent": 100, "level": "HIGH" },
+    { "name": "Spinning Matutino", "sessions": 2, "capacity": 8, "confirmedReservations": 6, "occupancyPercent": 75, "level": "HIGH" },
+    { "name": "Zumba Ritmos", "sessions": 1, "capacity": 3, "confirmedReservations": 2, "occupancyPercent": 66.7, "level": "HIGH" },
+    { "name": "Boxeo Fitness", "sessions": 1, "capacity": 4, "confirmedReservations": 2, "occupancyPercent": 50, "level": null },
+    { "name": "Yoga Flow", "sessions": 2, "capacity": 10, "confirmedReservations": 5, "occupancyPercent": 50, "level": "LOW" },
+    { "name": "Pilates Core", "sessions": 1, "capacity": 6, "confirmedReservations": 1, "occupancyPercent": 16.7, "level": "LOW" },
+    { "name": "HIIT Nocturno", "sessions": 1, "capacity": 10, "confirmedReservations": 1, "occupancyPercent": 10, "level": "LOW" }
+  ]
+}
+```
+
+- **Qué clases cuentan:** las no canceladas (`SCHEDULED`) cuya hora de fin ya
+  pasó y cuya fecha de inicio, en la zona del gimnasio, está en el rango. Una
+  clase que todavía no termina no cuenta, aunque sea de hoy.
+- **Ocupación:** suma de reservas `CONFIRMED` entre la suma del cupo máximo de
+  esas clases, por 100, con un decimal. Las reservas canceladas no cuentan.
+- **Orden:** de mayor a menor ocupación. Con el mismo porcentaje (ya
+  redondeado a un decimal), por nombre en orden alfabético.
+- **Resaltado (`level`):** con 6 clases o más, las 3 primeras son `HIGH`, las
+  3 últimas `LOW` y las de en medio `null`. Con menos de 6, la mitad superior
+  es `HIGH` y el resto `LOW`; con un número impar la del medio va en la mitad
+  superior (5 clases: 3 `HIGH` y 2 `LOW`). Ninguna clase tiene los dos.
+- **Sin clases:** si ninguna clase cuenta en el rango, no se genera el reporte:
+  404 "No hay clases en ese rango.".
 
 ## Ingresos de un periodo (`GET /reports/income`)
 
@@ -63,6 +102,12 @@ el monto es el del cobro que pagó.
 
 ## Datos de prueba
 
+El seed carga 10 clases ya terminadas con `entrenador2@gymhub.test`
+(`PAST_CLASSES`): 7 nombres con reservas de los 3 miembros de prueba, una
+clase cancelada y una reserva cancelada, que no cuentan. Todas terminaron en
+los últimos 30 días: un rango que los cubra da el ejemplo de arriba, si no hay
+otras clases terminadas.
+
 El seed carga 6 comprobantes de los últimos 3 meses (`INCOME_RECEIPTS`), con
 los tres conceptos, en efectivo y con tarjeta. Junto con los cobros pagados de
 H04 y H15 del mes actual, el reporte de los últimos meses tiene datos en cada
@@ -72,8 +117,8 @@ concepto.
 
 ```bash
 npx vitest run src/reports
-npx vitest run --config ./vitest.config.e2e.ts test/income-report.e2e-spec.ts
+npx vitest run --config ./vitest.config.e2e.ts test/income-report.e2e-spec.ts test/occupancy-report.e2e-spec.ts
 ```
 
-La prueba e2e crea sus propios comprobantes en 2020, donde no hay otros datos,
-y los borra al terminar.
+Las pruebas e2e crean sus propios datos en 2020, donde no hay otros, y los
+borran al terminar.

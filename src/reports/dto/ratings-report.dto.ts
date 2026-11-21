@@ -1,27 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { Matches } from 'class-validator';
-import {
-  REPORT_DATE_FORMAT_MESSAGE,
-  REPORT_DATE_PATTERN,
-} from '@Reports/services';
+import { ReportRangeQueryDto } from './report-range-query.dto.js';
 
 /** Query de GET /api/v1/reports/ratings (BE-23.1). */
-export class RatingsReportQueryDto {
-  @ApiProperty({
-    example: '2026-09-01',
-    description: 'Primer día del rango (YYYY-MM-DD), incluido.',
-  })
-  @Matches(REPORT_DATE_PATTERN, { message: REPORT_DATE_FORMAT_MESSAGE })
-  from!: string;
-
-  @ApiProperty({
-    example: '2026-11-30',
-    description:
-      'Último día del rango (YYYY-MM-DD), incluido. Hasta 12 meses después de from.',
-  })
-  @Matches(REPORT_DATE_PATTERN, { message: REPORT_DATE_FORMAT_MESSAGE })
-  to!: string;
-}
+export class RatingsReportQueryDto extends ReportRangeQueryDto {}
 
 export class TrainerRatingSummaryDto {
   @ApiProperty({ format: 'uuid' })
