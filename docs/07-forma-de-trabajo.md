@@ -1,6 +1,6 @@
 # Forma de trabajo
 
-**Tablero:** [enlace al tablero de Jira — PENDIENTE]
+**Tablero:** https://rodrigoguzman1412.atlassian.net/jira/software/projects/SCRUM/summary
 
 Trabajamos con Scrum. Cada épica del tablero corresponde a un módulo (E0 a E10), cada historia (H01 a H30) es una *Story* y cada task de base de datos, backend, frontend o QA es una *Subtask* con su responsable. Las cards de Jira tienen la clave `SCRUM-<n>`.
 

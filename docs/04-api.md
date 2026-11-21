@@ -1,6 +1,6 @@
 # API
 
-**Documentación interactiva (Swagger):** [https://PENDIENTE.onrender.com/api/docs]
+**Documentación interactiva (Swagger):** https://gymhub-api-6c9o.onrender.com/api/docs
 
 Todas las rutas llevan el prefijo `/api/v1`. Las respuestas y los cuerpos son JSON (salvo el comprobante, que es PDF). Los listados usan paginación con `page` y `pageSize` (máximo 100) y responden `{ items, page, pageSize, total }`. Los montos llegan como texto con dos decimales (`"25.00"`).
 
