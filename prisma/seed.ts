@@ -12,9 +12,13 @@ import { PrismaClient } from '../src/generated/prisma/client.js';
  * que TypeScript lo valide. Los datos semilla del negocio (planes, clases de
  * ejemplo, precios) los agrega cada dueño de módulo en su rama, no este seed.
  */
+// Contraseña por defecto SOLO para local y pruebas e2e. En producción el seed se
+// corre con SEED_ADMIN_PASSWORD, SEED_STAFF_PASSWORD y SEED_MEMBER_PASSWORD
+// definidas, así las credenciales de prueba no quedan en el repositorio.
 const DEMO_PASSWORD = 'Demo1234!';
-const ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD ?? DEMO_PASSWORD;
-const STAFF_PASSWORD = process.env.SEED_STAFF_PASSWORD ?? DEMO_PASSWORD;
+const ADMIN_PASSWORD = process.env.SEED_ADMIN_PASSWORD || DEMO_PASSWORD;
+const STAFF_PASSWORD = process.env.SEED_STAFF_PASSWORD || DEMO_PASSWORD;
+const MEMBER_PASSWORD = process.env.SEED_MEMBER_PASSWORD || DEMO_PASSWORD;
 
 // Cuentas iniciales del personal (DB-2.2): contraseña desde el entorno; recepción
 // y entrenadores con cambio obligatorio. Emails en gymhub.test para no romper las
@@ -342,7 +346,7 @@ const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
 const prisma = new PrismaClient({ adapter });
 
 async function main() {
-  const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 12);
+  const passwordHash = await bcrypt.hash(MEMBER_PASSWORD, 12);
 
   for (const s of STAFF) {
     await prisma.user.upsert({
@@ -373,7 +377,7 @@ async function main() {
         passwordHash,
       },
     });
-    console.log(`MEMBER     ${m.email} / ${DEMO_PASSWORD}  (${m.memberCode})`);
+    console.log(`MEMBER     ${m.email}  (${m.memberCode})`);
   }
 
   // Deja la secuencia por encima de los códigos sembrados -> el nextval de BE-1.1

@@ -26,12 +26,20 @@ async function bootstrap() {
     }),
   );
 
+  // CORS: solo se aceptan peticiones del navegador que vengan del frontend
+  // (FRONTEND_URL, separados por coma). Hoy el navegador llama a Next.js y Next
+  // reenvía a la API, pero así la API queda lista si el front la llama directo.
+  app.enableCors({
+    origin: configService.get('FRONTEND_URL', { infer: true }),
+    credentials: true,
+  });
+
   app.enableShutdownHooks();
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('GymHub API')
     .setDescription('API REST con autenticación por usuario y contraseña.')
-    .setVersion('1.0')
+    .setVersion('1.0.0')
     .addBearerAuth()
     .build();
 
