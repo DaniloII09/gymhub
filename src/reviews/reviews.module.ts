@@ -1,7 +1,11 @@
 import { Module } from '@nestjs/common';
+import { ReviewsController } from '@Reviews/controllers';
+import { ReviewRepository } from '@Reviews/repositories';
+import { ReviewsService } from '@Reviews/services';
 
-// Épica 8 · Reseñas. Dueño: Christian.
-// Esqueleto. Agregá controllers/, services/, repositories/ y dto/ a medida que
-// los creés, y declaralos acá. Usá el módulo de usuarios como referencia.
-@Module({})
+// Épica 8 · Reseñas (H22). Dueño: Christian / Alexis Merino.
+@Module({
+  controllers: [ReviewsController],
+  providers: [ReviewsService, ReviewRepository],
+})
 export class ReviewsModule {}
